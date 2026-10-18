@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<workzag-jobs>
+
+<position>
+    <id>2807515</id>
+    <subcompany>Wandelbots GmbH</subcompany>
+    <office>Dresden</office>
+    <department>Experience Team</department>
+    <recruitingCategory>Permanent Employees</recruitingCategory>
+    <name>Automation Engineer (gn) Industrial Robotics &amp; Software Development</name>
+    <jobDescriptions></jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>experienced</seniority>
+    <schedule>full-time</schedule>
+    <yearsOfExperience>5-7</yearsOfExperience>
+    <keywords>Automation,Robotics,Software,SaaS,Platform,PLC,Python</keywords>
+    <occupation>industrial_and_manufacturing_engineering</occupation>
+    <occupationCategory>engineering</occupationCategory>
+    <createdAt>2026-09-22T11:57:24+00:00</createdAt>
+</position>
+
+<position>
+    <id>2743165</id>
+    <subcompany>Wandelbots GmbH</subcompany>
+    <office>Dresden</office>
+    <department>Engineering</department>
+    <recruitingCategory>Permanent Employees</recruitingCategory>
+    <name>Senior Software Engineer (gn) Camera Integration Framework</name>
+    <jobDescriptions></jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>experienced</seniority>
+    <schedule>full-time</schedule>
+    <yearsOfExperience>5-7</yearsOfExperience>
+    <keywords>Kubernetes,Camera Integration,Cloud-native Platform,Backend Development (Python / Go),API Design,Industrial Vision / Machine Vision,SDK Development,Robotics,Containerization,System Architecture</keywords>
+    <occupation>software_and_system_architecture</occupation>
+    <occupationCategory>it_software</occupationCategory>
+    <createdAt>2026-08-05T16:53:42+00:00</createdAt>
+</position>
+
+</workzag-jobs>

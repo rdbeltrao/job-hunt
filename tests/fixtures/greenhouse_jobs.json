@@ -1,0 +1,139 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://job-boards.greenhouse.io/getyourguide/jobs/8264277",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": true,
+     "requires_processing_consent": false,
+     "requires_retention_consent": true,
+     "retention_period": 1095,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 3575842,
+   "location": {
+    "name": "Berlin"
+   },
+   "metadata": [
+    {
+     "id": 286879,
+     "name": "Career Site Search Tag",
+     "value": null,
+     "value_type": "multi_select"
+    },
+    {
+     "id": 15471797,
+     "name": "Management Level",
+     "value": "L7",
+     "value_type": "single_select"
+    },
+    {
+     "id": 30927681,
+     "name": "Job Eligible for Equity",
+     "value": true,
+     "value_type": "yes_no"
+    }
+   ],
+   "id": 8264277,
+   "updated_at": "2026-10-15T03:04:40-04:00",
+   "requisition_id": "JR101928",
+   "title": "Engineering Manager, Agentic Platform",
+   "company_name": "GetYourGuide",
+   "first_published": "2026-10-15T03:04:26-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;h3&gt;Change the way the world travels&lt;/h3&gt;\n&lt;p&gt;Join the GetYourGuide journey to connect people with unforgettable travel experiences around the world. Millions look to us for unique activities they can trust, and it’s all powered by our commitment to make every single journey extraordinary - including yours.&lt;/p&gt;\n&lt;p&gt;Ready to unlock your potential with a community of fellow explorers? Find your next role at our Berlin HQ or one of our local offices around the globe, from New York to Bangkok. Head to &lt;a href=&quot;https://www.getyourguide.careers/&quot;&gt;getyourguide.careers&lt;/a&gt; to take the first step.&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;Team mission&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;Own an agentic platform allowing teams to create agentic workflows by abstracting the underlying infrastructure.&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;Your mission&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;Build and maintain an opinionated platform for agentic workflows, allowing mission teams to focus on delivering business value&lt;/li&gt;\n&lt;li&gt;Be responsible for all hiring and performance management topics on the Engineering side, helping your engineers reach their full potential&lt;/li&gt;\n&lt;li&gt;Partner closely with your peers and stakeholders to shape the roadmap and portfolio allocation, and drive high-impact delivery&lt;/li&gt;\n&lt;/ul&gt;\n&lt;h3&gt;&lt;strong&gt;Your toolkit&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;You have a strong sense of ownership, ensuring that technical and project plans are aligned with your stakeholders &amp;amp; team members for delivery&lt;/li&gt;\n&lt;li&gt;You approach the domain of agentic workflows with a product mindset, considering Engineers, Product Managers, and Designers as your customers.&lt;/li&gt;\n&lt;li&gt;Enjoy complex topics with an open mind and eye for simplicity.&lt;/li&gt;\n&lt;li&gt;Have a passion for people and support and coach your engineers without going into micromanagement mode.&lt;/li&gt;\n&lt;li&gt;Proven technical background in building secure, high-impact internal tools and LLM workflows&lt;/li&gt;\n&lt;/ul&gt;\n&lt;h3&gt;&lt;strong&gt;Extras that give you an edge&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;Hands-on experience with modern AI agent frameworks (e.g., Codex or Claude) and evaluation platforms (e.g., Braintrust).&lt;/li&gt;\n&lt;li&gt;Background in establishing agent safety, sandboxing execution environments, or managing identity and access controls for autonomous AI workflows.&lt;/li&gt;\n&lt;li&gt;Familiarity with developer experience benchmarking, observability tools, and LLM cost and routing optimization.&lt;/li&gt;\n&lt;/ul&gt;\n&lt;h3&gt;&lt;strong&gt;How we’ll make your career journey extraordinary&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;Annual personal growth budget and mentorship programs for continuous learning and development&lt;/li&gt;\n&lt;li&gt;Work from anywhere in the world for 30 days per year&lt;/li&gt;\n&lt;li&gt;A hybrid working approach with three days of in office collaboration (Mon, Tue, Thur) and two days of optional at home focus time.&amp;nbsp;&lt;/li&gt;\n&lt;li&gt;Opportunities to collaborate and socialize&amp;nbsp; with a quarterly team event budget&amp;nbsp;&lt;/li&gt;\n&lt;li&gt;Access to leading AI tools plus the resources and budget to get the most out of them&lt;/li&gt;\n&lt;li&gt;Monthly transportation and fitness budget&lt;/li&gt;\n&lt;li&gt;Discounts for you, your friends, and family on GetYourGuide activities&lt;/li&gt;\n&lt;li&gt;Language reimbursement program&lt;/li&gt;\n&lt;li&gt;Health and wellness benefits&lt;/li&gt;\n&lt;/ul&gt;\n&lt;p&gt;And more…&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;How to apply&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;Submit your CV/resume in English using the form below. For tips and insights into our hiring process and culture, check out ‘&lt;a href=&quot;https://www.getyourguide.careers/how-we-hire&quot;&gt;how we hire&lt;/a&gt;’ and ‘&lt;a href=&quot;https://www.getyourguide.careers/life-at-getyourguide&quot;&gt;life at GetYourGuide&lt;/a&gt;’. If you have any further questions, please don’t hesitate to get in touch at &lt;a href=&quot;mailto:jobs@getyourguide.com&quot;&gt;jobs@getyourguide.com&lt;/a&gt;.&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;We’re an equal opportunities employer&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;Our commitment is that every qualified person will be evaluated according to their skills regardless of age, gender identity, ethnicity, sexual orientation, disability status, or religion. Please refrain from including your picture and age with your application.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;#LI-Hybrid&lt;/p&gt;\n&lt;h3&gt;&amp;nbsp;&lt;/h3&gt;",
+   "departments": [
+    {
+     "id": 22689,
+     "name": "Engineering",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "offices": [
+    {
+     "id": 1153,
+     "name": "Berlin",
+     "location": "DEU",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": null,
+   "ai_opt_out_request_url": null
+  },
+  {
+   "absolute_url": "https://job-boards.greenhouse.io/getyourguide/jobs/8066991",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": true,
+     "requires_processing_consent": false,
+     "requires_retention_consent": true,
+     "retention_period": 1095,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 3495490,
+   "location": {
+    "name": "Paris"
+   },
+   "metadata": [
+    {
+     "id": 286879,
+     "name": "Career Site Search Tag",
+     "value": null,
+     "value_type": "multi_select"
+    },
+    {
+     "id": 15471797,
+     "name": "Management Level",
+     "value": "L4",
+     "value_type": "single_select"
+    },
+    {
+     "id": 30927681,
+     "name": "Job Eligible for Equity",
+     "value": false,
+     "value_type": "yes_no"
+    }
+   ],
+   "id": 8066991,
+   "updated_at": "2026-08-26T09:03:02-04:00",
+   "requisition_id": "JR101812",
+   "title": "Account Executive (French Speaking)",
+   "company_name": "GetYourGuide",
+   "first_published": "2026-07-22T08:43:58-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;h3&gt;&lt;strong&gt;Change the way the world travels&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;Be part of the GetYourGuide journey and connect people with unforgettable travel experiences worldwide. Since 2009, millions of travelers have booked unique activities with us in over 12,000 cities. Our headquarters in Berlin is supported by local offices across the globe, from New York to Bangkok.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;Ready to join a diverse community of over 850 fellow explorers dedicated to revolutionizing the travel experience industry? Check out getyourguide.careers to learn more.&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;Team Mission&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;We’re looking for a driven, resilient, and results-oriented Account Executive to strengthen our expert Sales Team in Paris. In this role, you will play a pivotal part in our growth by acquiring the best and most popular things to do in travel destinations. You will focus on building and managing a high-performing sales pipeline, negotiating optimal terms, and driving supplier acquisition in France. This is a unique opportunity to directly impact millions of travelers while advancing GetYourGuide’s position in the experience industry..&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;Your mission&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;Identify and onboard new suppliers, primarily tour and experience providers, as well as attractions.&lt;/li&gt;\n&lt;li&gt;Effectively manage the entire sales funnel, including outreach, negotiation, closing, and onboarding, to consistently hit and exceed quota.&lt;/li&gt;\n&lt;li&gt;Collaborate with internal teams to align supplier acquisition with broader business goals, ensuring sustainable growth.&lt;/li&gt;\n&lt;li&gt;Represent GetYourGuide at relevant industry events to drive acquisition and establish credibility.&lt;/li&gt;\n&lt;li&gt;Regularly travel (up to 25%) to build strong relationships with suppliers in destination and create long-term partnerships&lt;/li&gt;\n&lt;/ul&gt;\n&lt;h3&gt;&lt;strong&gt;Your toolkit&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;You have 3+ years of experience in B2B sales, with a proven track record of exceeding sales targets, running a disciplined, data-driven process, and confidently using sales tools and software — including CRM (e.g., Salesforce) and sales enablement tools.&amp;nbsp;&lt;/li&gt;\n&lt;li&gt;You are resilient, hungry for success, and thrive under pressure, consistently raising the bar for yourself.&lt;/li&gt;\n&lt;li&gt;You speak French at a native level as well as proficiency in English.&lt;/li&gt;\n&lt;li&gt;You excel at handling objections, reframing conversations with insights, and creating constructive tension to close challenging deals.&lt;/li&gt;\n&lt;li&gt;You bring strong problem-solving skills, using data to prioritize actions and inform decisions.&lt;/li&gt;\n&lt;li&gt;You are an excellent communicator, able to articulate value propositions clearly to diverse audiences, adapting your approach for maximum impact.&lt;/li&gt;\n&lt;li&gt;You collaborate with peers, share best practices, and lift the team to new heights.&lt;/li&gt;\n&lt;/ul&gt;\n&lt;h3&gt;&lt;strong&gt;We want your journey with us to be extraordinary&lt;/strong&gt;&lt;/h3&gt;\n&lt;ul&gt;\n&lt;li&gt;Annual personal growth budget and mentorship programs for continuous learning and development&lt;/li&gt;\n&lt;li&gt;Work from anywhere in the world for 30 days per year&lt;/li&gt;\n&lt;li&gt;A hybrid working approach with three days of in office collaboration (Mon, Tue, Thur) and two days of optional at home focus time.&lt;/li&gt;\n&lt;li&gt;Opportunities to collaborate and socialize with team members through quarterly team events and yearly company-wide events&lt;/li&gt;\n&lt;li&gt;Monthly transportation and fitness budget&lt;/li&gt;\n&lt;li&gt;Discounts for you, your friends, and family on GetYourGuide activities&lt;/li&gt;\n&lt;li&gt;Language reimbursement program&lt;/li&gt;\n&lt;li&gt;Health and wellness benefits&lt;/li&gt;\n&lt;li&gt;And more…&lt;/li&gt;\n&lt;/ul&gt;\n&lt;h3&gt;&lt;strong&gt;How to apply&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;Submit your CV/resume in English using the form below. For tips and insights into our hiring process and culture, check out ‘&lt;a href=&quot;https://www.getyourguide.careers/how-we-hire&quot;&gt;how we hire&lt;/a&gt;’ and ‘&lt;a href=&quot;https://www.getyourguide.careers/life-at-getyourguide&quot;&gt;life at GetYourGuide&lt;/a&gt;’. If you have any further questions, please don’t hesitate to get in touch at &lt;a href=&quot;mailto:jobs@getyourguide.com&quot;&gt;jobs@getyourguide.com&lt;/a&gt;.&lt;/p&gt;\n&lt;h3&gt;&lt;strong&gt;We’re an equal opportunities employer&lt;/strong&gt;&lt;/h3&gt;\n&lt;p&gt;Our commitment is that every qualified person will be evaluated according to their skills regardless of age, gender identity, ethnicity, sexual orientation, disability status, or religion. Please refrain from including your picture and age with your application.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;#LI-Hybrid&lt;/p&gt;\n&lt;h3&gt;&amp;nbsp;&lt;/h3&gt;",
+   "departments": [
+    {
+     "id": 1924,
+     "name": "Sales",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "offices": [
+    {
+     "id": 2673,
+     "name": "Paris",
+     "location": "FRA",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": null,
+   "ai_opt_out_request_url": null
+  }
+ ],
+ "meta": {
+  "total": 70
+ }
+}

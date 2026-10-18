@@ -1,0 +1,47 @@
+# Copy this file to companies.yaml (ignored by git) and edit it.
+# Companies whose career pages are read directly through their applicant-tracking
+# system's public API. Supported `ats` values and where the slug comes from:
+#   personio    https://{slug}.jobs.personio.de
+#   greenhouse  https://job-boards.greenhouse.io/{slug}  (or boards.greenhouse.io/{slug})
+#   ashby       https://jobs.ashbyhq.com/{slug}
+#
+# A board lists every opening, so only titles containing one of `title_keywords`
+# (case-insensitive) are kept. Set `title_keywords: []` to keep everything.
+title_keywords:
+  - engineering manager
+  - head of engineering
+  - tribe lead
+  - engineering lead
+  - head of technology
+  - head of software
+
+# Example list: German or EU-remote tech companies whose slugs answered HTTP 200 on
+# 2026-10-16. Replace with the companies you care about; add `enabled: false` to pause one.
+companies:
+  # Greenhouse
+  - {name: GetYourGuide, ats: greenhouse, slug: getyourguide}
+  - {name: HelloFresh, ats: greenhouse, slug: hellofresh}
+  - {name: N26, ats: greenhouse, slug: n26}
+  - {name: SumUp, ats: greenhouse, slug: sumup}
+  - {name: Raisin, ats: greenhouse, slug: raisin}
+  - {name: Celonis, ats: greenhouse, slug: celonis}
+  - {name: Doctolib, ats: greenhouse, slug: doctolib}
+  - {name: Parloa, ats: greenhouse, slug: parloa}
+  - {name: commercetools, ats: greenhouse, slug: commercetools}
+  - {name: Grover, ats: greenhouse, slug: grover}
+  - {name: Blacklane, ats: greenhouse, slug: blacklane}
+  # Ashby
+  - {name: Pliant, ats: ashby, slug: pliant}
+  - {name: Moss, ats: ashby, slug: moss}
+  - {name: Enpal, ats: ashby, slug: enpal}
+  - {name: Babbel, ats: ashby, slug: babbel}
+  - {name: Peec AI, ats: ashby, slug: peec}
+  - {name: n8n, ats: ashby, slug: n8n}
+  - {name: Upvest, ats: ashby, slug: upvest}
+  - {name: Tacto, ats: ashby, slug: tacto}
+  - {name: Langdock, ats: ashby, slug: langdock}
+  - {name: AMBOSS, ats: ashby, slug: amboss}
+  - {name: Forto, ats: ashby, slug: forto}
+  # Personio
+  - {name: Everphone, ats: personio, slug: everphone}
+  - {name: Wandelbots, ats: personio, slug: wandelbots}

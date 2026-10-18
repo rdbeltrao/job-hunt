@@ -1,0 +1,33 @@
+# LinkedIn job searches. Copy this file to searches.yaml and paste your own saved
+# LinkedIn jobs search URLs from the browser. searches.yaml is ignored by git.
+#
+# source: linkedin        drives your logged-in browser profile (run `python -m jobs login` once)
+# source: linkedin_guest  logged-out guest endpoints, disabled: LinkedIn returns HTTP 429
+#                         after a handful of detail requests, so most jobs come back
+#                         without a description.
+#
+# URL parameters worth knowing:
+#   geoId      101282230 Germany, 103035651 Berlin, 105646813 Spain, 107025191 Barcelona,
+#              100994331 Madrid, 100364837 Portugal, 102775852 Lisbon (look yours up by
+#              running a search on LinkedIn and copying the URL)
+#   f_TPR      r86400 last 24 hours, r604800 last 7 days, r2592000 last 30 days
+#   f_WT       1 on-site, 2 remote, 3 hybrid (comma-separated, URL-encoded as %2C)
+#   sortBy=DD  newest first
+#   max_pages  result pages per search (25 cards each), default 8; keep it low: the
+#              crawler walks them as you, at human pace.
+#
+# The `currentJobId`, `origin` and `refresh` parameters LinkedIn adds to a copied URL
+# only select a job in the right-hand pane; drop them.
+searches:
+  - name: engineering-manager-germany-7d
+    url: "https://www.linkedin.com/jobs/search/?f_TPR=r604800&f_WT=2%2C3&geoId=101282230&keywords=Engineering%20Manager&sortBy=DD"
+
+  - name: head-of-engineering-germany-7d
+    url: "https://www.linkedin.com/jobs/search/?f_TPR=r604800&f_WT=2%2C3&geoId=101282230&keywords=Head%20of%20Engineering&sortBy=DD"
+    max_pages: 3
+
+  - name: em-germany-24h-guest
+    source: linkedin_guest
+    enabled: false
+    url: "https://www.linkedin.com/jobs/search/?keywords=Engineering%20Manager&geoId=101282230&f_TPR=r86400"
+    max_pages: 2

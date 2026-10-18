@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+out/
+.env
+# Personal configuration: copy the .example files and edit your own copies.
+profile.md
+searches.yaml
+companies.yaml
