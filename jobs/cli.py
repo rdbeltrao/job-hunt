@@ -428,12 +428,12 @@ def run_status(args: argparse.Namespace) -> int:
     except export.HeaderMismatch as exc:
         print(f"status: refused: {exc}")
         return 1
-    if args.set:
-        if args.set not in export.STATUSES:
+    if args.set or args.note:
+        if args.set and args.set not in export.STATUSES:
             print(f"status: unknown status {args.set!r}; one of {', '.join(export.STATUSES)}")
             return 1
         if not args.job_ids:
-            print("status: --set needs at least one job_id")
+            print("status: --set and --note need at least one job_id")
             return 1
         by_id = {r["job_id"]: r for r in rows}
         missing = [j for j in args.job_ids if j not in by_id]
@@ -441,8 +441,11 @@ def run_status(args: argparse.Namespace) -> int:
             print(f"status: job_id not in {csv_path}: {', '.join(missing)}")
             return 1
         for job_id in args.job_ids:
-            export.set_status(by_id[job_id], args.set, args.note or "", args.date)
-            print(f"status: {job_id} -> {args.set}")
+            row = by_id[job_id]
+            # --note alone keeps the status and only adds a dated line to the trail.
+            status = args.set or row["status"] or export.DEFAULT_STATUS
+            export.set_status(row, status, args.note or "", args.date)
+            print(f"status: {job_id} -> {status}" + (f" ({args.note})" if args.note and not args.set else ""))
         export.write_rows(csv_path, rows)
         return 0
     counts = Counter(r["status"] for r in rows)
@@ -452,6 +455,128 @@ def run_status(args: argparse.Namespace) -> int:
             last = r["notes"].splitlines()[-1] if r["notes"] else ""
             print(f"  {r['status']:<10} {r['job_id']:<22} {r['company']} - {r['title']}  {last}")
     return 0
+
+
+def run_network(args: argparse.Namespace) -> int:
+    """Weekly LinkedIn connection plan from the CSV, or mark companies as covered (--done)."""
+    from jobs import export, network
+
+    done_path = Path(args.done_file)
+    done = network.load_done(done_path)
+    if args.done:
+        network.mark_done(args.done, done, args.date)
+        network.save_done(done, done_path)
+        print(f"network: marked done: {', '.join(args.done)} (recorded in {done_path})")
+        return 0
+    csv_path = Path(args.csv)
+    try:
+        rows = export.read_rows(csv_path)
+    except export.HeaderMismatch as exc:
+        print(f"network: refused: {exc}")
+        return 1
+    plans = network.rank_companies(rows, done)
+    if args.limit:
+        plans = plans[: args.limit]
+    roles = [r.strip() for r in args.roles.split(",") if r.strip()] if args.roles else None
+    text = network.render_plan(plans, roles=roles, quota=args.quota, today=args.date)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        print(f"network: {len(plans)} companies in this week's plan; written to {out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def run_outreach(args: argparse.Namespace) -> int:
+    """Write the outreach pack (job, profile, people searches, message shapes) for one opening as JSON."""
+    import json
+
+    from jobs import export, outreach
+
+    csv_path = Path(args.csv)
+    try:
+        rows = export.read_rows(csv_path)
+    except export.HeaderMismatch as exc:
+        print(f"outreach: refused: {exc}")
+        return 1
+    row = next((r for r in rows if r["job_id"] == args.job_id), None)
+    if row is None:
+        print(f"outreach: job_id not in {csv_path}: {args.job_id}")
+        return 1
+    profile_path = Path(args.profile)
+    profile = profile_path.read_text(encoding="utf-8").strip() if profile_path.exists() else ""
+    if not profile:
+        print(f"outreach: {profile_path} not found or empty; the pack has no profile section")
+    text = json.dumps(outreach.build_pack(row, profile), ensure_ascii=False, indent=1)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        print(f"outreach: pack for {row['company']} - {row['title']} written to {out}")
+    else:
+        print(text)
+    return 0
+
+
+def run_engage(args: argparse.Namespace) -> int:
+    """Collect the latest posts of the creators in creators.yaml (--list) or mark posts commented on (--done)."""
+    import json
+
+    from jobs import engage
+
+    done_path = Path(args.done_file)
+    done = engage.load_done(done_path)
+    if args.done:
+        engage.mark_done(args.done, done, args.date)
+        engage.save_done(done, done_path)
+        print(f"engage: marked done: {len(args.done)} posts (recorded in {done_path})")
+        return 0
+    creators = engage.load_creators(Path(args.creators))
+    if not creators:
+        print(f"engage: no creators configured. Copy creators.example.yaml to {args.creators} and add 3 to 5 people whose posts you want to comment on.")
+        return 1
+    from jobs.adapters import linkedin_activity
+    from jobs.browser import LoginRequired, persistent_context
+
+    posts = []
+    failures: list[str] = []
+    dump_dir = Path(args.dump_html) if args.dump_html else None
+    try:
+        with persistent_context(headless=not args.headed) as context:
+            for creator in creators:
+                try:
+                    found = linkedin_activity.fetch_recent_posts(context, creator.url, max_posts=args.max_posts, dump_dir=dump_dir)
+                except LoginRequired as exc:
+                    failures.append(f"{creator.name}: login required (landed on {exc})")
+                    print(LOGIN_HINT, file=sys.stderr)
+                    break
+                except Exception as exc:  # noqa: BLE001 - one creator failing must not stop the others
+                    failures.append(f"{creator.name}: {type(exc).__name__}: {exc}")
+                    log.exception("activity fetch for %s failed", creator.name)
+                    continue
+                for post in found:
+                    post.creator = creator.name
+                    post.priority = creator.priority
+                posts.extend(found)
+                print(f"[engage] {creator.name}: {len(found)} posts", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"browser: {type(exc).__name__}: {exc}")
+        log.exception("browser session failed")
+    payload = engage.build_pending(posts, done, max_age_days=args.max_age_days)
+    payload["failures"] = failures
+    text = json.dumps(payload, ensure_ascii=False, indent=1)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        print(f"engage: {len(payload['posts'])} posts to consider ({len(payload['skipped_done'])} already commented); written to {out}")
+    else:
+        print(text)
+    for f in failures:
+        print(f"engage: failed: {f}", file=sys.stderr)
+    return 0 if posts or not failures else 1
 
 
 def run_export(args: argparse.Namespace) -> int:
@@ -541,7 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="show rows whose status is not new, or set the status of given job_ids")
     status.add_argument("--csv", default="out/jobs.csv")
     status.add_argument("--set", default=None, metavar="STATUS", help="new status for the given job_ids: new, skipped, draft, applied, replied, interview, offer, rejected, withdrawn")
-    status.add_argument("--note", default=None, help="text appended to notes with today's date and the status")
+    status.add_argument("--note", default=None, help="text appended to notes with today's date and the status; without --set the status stays")
     status.add_argument("--date", default=None, help="date for the notes line (default today, ISO 8601)")
     status.add_argument("job_ids", nargs="*", help="rows to change (with --set) or to show")
     status.set_defaults(func=run_status)
@@ -563,6 +688,36 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--list", action="store_true", help="print or write the pending jobs with the profile and instructions")
     group.add_argument("--apply", metavar="JSON", help="read {jobs: [{job_id, strong_matches, gaps, red_flags, pitch}]} and write it into the CSV")
     explain.set_defaults(func=run_explain)
+
+    network = sub.add_parser("network", help="weekly LinkedIn connection plan from the CSV (companies with apply/maybe openings or applications), or --done to mark companies covered")
+    network.add_argument("--csv", default="out/jobs.csv")
+    network.add_argument("--done-file", default=str(Path("out/network.json")), help="where covered companies are recorded")
+    network.add_argument("--limit", type=int, default=10, help="companies in the plan (default 10); 0 for all")
+    network.add_argument("--quota", type=int, default=100, help="invitations per week to spread over the plan (default 100)")
+    network.add_argument("--roles", default=None, help="comma-separated role families to search per company (default: EM, Head of Eng, VP Eng, CTO, Technical Recruiter)")
+    network.add_argument("--out", default=None, help="write the Markdown plan here instead of stdout")
+    network.add_argument("--date", default=None, help="date for the plan heading or the --done record (default today)")
+    network.add_argument("--done", nargs="*", metavar="COMPANY", help="mark these companies as covered; they leave the plan until a new opening appears")
+    network.set_defaults(func=run_network)
+
+    outreach = sub.add_parser("outreach", help="JSON pack for writing a LinkedIn message about one opening: job, profile, people searches, message shapes")
+    outreach.add_argument("job_id", help="row to build the pack for, for example linkedin:4477094289")
+    outreach.add_argument("--csv", default="out/jobs.csv")
+    outreach.add_argument("--profile", default=str(PROFILE_PATH))
+    outreach.add_argument("--out", default=None, help="write the JSON here instead of stdout")
+    outreach.set_defaults(func=run_outreach)
+
+    engage = sub.add_parser("engage", help="latest posts of the creators in creators.yaml as JSON, to draft comments elsewhere; --done marks posts commented on")
+    engage.add_argument("--creators", default="creators.yaml")
+    engage.add_argument("--done-file", default=str(Path("out/engaged.json")), help="where commented post URLs are recorded")
+    engage.add_argument("--out", default=None, help="write the JSON here instead of stdout (the scheduled run uses out/engage-pending.json)")
+    engage.add_argument("--max-posts", type=int, default=3, help="posts to read per creator (default 3)")
+    engage.add_argument("--max-age-days", type=int, default=3, help="ignore posts older than this (default 3)")
+    engage.add_argument("--headed", action="store_true", help="show the browser window")
+    engage.add_argument("--dump-html", nargs="?", const="out/debug", default=None, help="save each activity page's HTML for selector debugging")
+    engage.add_argument("--date", default=None, help="date for the --done record (default today)")
+    engage.add_argument("--done", nargs="*", metavar="POST_URL", help="mark these post URLs as commented on")
+    engage.set_defaults(func=run_engage)
 
     run = sub.add_parser("run", help="fetch, score, export in one go (daily run)")
     _add_fetch_args(run)

@@ -19,12 +19,13 @@ status and notes.
 
 ## Make it yours
 
-Three files are yours and ignored by git; copy the examples and edit them:
+Four files are yours and ignored by git; copy the examples and edit them:
 
 ```bash
 cp profile.example.md profile.md         # who you are, what you want, what blocks you
 cp searches.example.yaml searches.yaml   # your saved LinkedIn search URLs
 cp companies.example.yaml companies.yaml # career pages to read directly (optional)
+cp creators.example.yaml creators.yaml   # people whose posts you comment on (optional)
 ```
 
 `profile.md` drives the scoring: the questions in `jobs/scoring/criteria.py` refer to its
@@ -160,6 +161,63 @@ uv run python -m jobs status --set rejected --date 2026-10-25 linkedin:447709428
 `rejected`, `withdrawn`. Every change appends a dated line to `notes` (for example
 `2026-10-19 applied: Easy Apply`), so the column keeps the history of each application.
 Nothing else in the row is touched.
+
+`--note` without `--set` keeps the status and only appends the dated line, for example to
+record that you wrote to someone about the opening.
+
+## LinkedIn beyond the job list: network, outreach, engage
+
+Three commands cover the part of a LinkedIn job search that is not reading postings. They
+follow the advice in Ksu Dranitsina's LinkedIn guide: grow a relevant network (recruiters
+filter on "has connections at our company"), write to a person for every application you
+care about, and comment on a few creators' posts every day instead of writing your own.
+None of them connects, messages, comments or posts for you: they produce checklists and
+hand-off files, you do the clicking.
+
+### `python -m jobs network`
+
+```bash
+uv run python -m jobs network --limit 10 --out out/network-plan.md   # this week's checklist
+uv run python -m jobs network --done "Acme GmbH" "Beta Co"           # covered; they leave the plan
+```
+
+Ranks the companies in `out/jobs.csv` worth connecting at (an application in progress
+first, then apply verdicts, then maybes, counts capped so a company posting the same role
+in twenty cities does not win) and writes a Markdown checklist: per company the company
+page search and a people search per role family (`--roles`, default Engineering Manager,
+Head of Engineering, VP Engineering, CTO, Technical Recruiter), with the weekly budget
+(`--quota`, default 100 invitations). Covered companies are kept in `out/network.json`.
+
+### `python -m jobs outreach <job_id>`
+
+```bash
+uv run python -m jobs outreach linkedin:4477094289 --out out/outreach-4477094289.json
+```
+
+Writes the pack for one message about one opening: the job row, `profile.md`, LinkedIn
+people searches for the hiring manager, the recruiter and possible referrers at that
+company, the posts search for the role, and the paragraph structure of each message type
+(recruiter or hiring manager, referral, networking, connection note). Whoever writes the
+message (a Claude session, or you) reads it; the CSV is not touched. Record the contact
+afterwards with `jobs status --note "outreach: <person, role>" <job_id>`.
+
+### `python -m jobs engage`
+
+```bash
+cp creators.example.yaml creators.yaml      # 3 to 5 people whose posts you comment on
+uv run python -m jobs engage --out out/engage-pending.json
+uv run python -m jobs engage --done https://www.linkedin.com/feed/update/urn:li:share:123/
+```
+
+Opens each creator's recent-activity page in the logged-in browser profile (one page load
+per creator, a few seconds apart, same pacing rules as `fetch`), reads the latest posts
+(`--max-posts`, default 3; `--max-age-days`, default 3) and writes them with their URL,
+age and counts to a JSON hand-off, leaving out posts already in `out/engaged.json`. A
+writing session drafts the comments from it; `--done` records the ones you posted.
+`jobs/adapters/linkedin_activity.py` parses both the 2025 profile activity markup
+(role=list cards, `expandable-text-box` commentary, post ids inside the
+translatable-commentary ids) and the older `feed-shared-update-v2` markup; `--dump-html`
+saves the raw page when a selector stops matching.
 
 ## Rescoring (`python -m jobs rescore`)
 
@@ -324,6 +382,10 @@ jobs/adapters/personio.py
 jobs/adapters/greenhouse.py         Greenhouse job-board JSON adapter
 jobs/adapters/ashby.py              Ashby job-board JSON adapter
 jobs/config.py              searches.yaml / companies.yaml loaders
-jobs/cli.py                 login, fetch, score, export, run
+jobs/network.py             weekly connection plan from the CSV (jobs network)
+jobs/outreach.py            outreach pack for one opening (jobs outreach)
+jobs/engage.py              creators.yaml, engaged posts store, comment hand-off (jobs engage)
+jobs/adapters/linkedin_activity.py  logged-in reader of a member's recent posts
+jobs/cli.py                 login, fetch, score, export, status, rescore, explain, network, outreach, engage, run
 tests/                      fixtures and fakes only: no network, no browser, no API keys
 ```

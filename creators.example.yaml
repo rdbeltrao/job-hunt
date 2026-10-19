@@ -1,0 +1,17 @@
+# Copy this file to creators.yaml (ignored by git) and edit it.
+# People whose LinkedIn posts you want to comment on during the search: 3 to 5 creators in
+# your field whose content you actually read. `python -m jobs engage --list` opens each
+# profile's recent-activity page as you (same browser profile as `fetch`), reads the
+# latest posts and writes them to out/engage-pending.json for a writing session to draft
+# comments from. It never comments or reacts.
+#
+#   name      how the creator appears in the hand-off
+#   url       the profile URL (https://www.linkedin.com/in/<slug>/)
+#   priority  higher sorts first in the hand-off (default 1)
+#   enabled   false pauses a creator (default true)
+creators:
+  - name: Example Creator
+    url: https://www.linkedin.com/in/example-creator/
+    priority: 2
+  - name: Another Creator
+    url: https://www.linkedin.com/in/another-creator/
