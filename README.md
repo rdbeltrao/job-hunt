@@ -148,6 +148,19 @@ scheduled routine can run `python -m jobs run`, write the explanations with
 `jobs explain --list` / `--apply`, and re-upload the CSV. Ask Claude for both; nothing in
 this repository depends on them.
 
+## Application status (`python -m jobs status`)
+
+```bash
+uv run python -m jobs status                                        # counts, and every row that is not "new"
+uv run python -m jobs status --set applied --note "Easy Apply" linkedin:4477094289
+uv run python -m jobs status --set rejected --date 2026-10-25 linkedin:4477094289
+```
+
+`status` is one of `new`, `skipped`, `draft`, `applied`, `replied`, `interview`, `offer`,
+`rejected`, `withdrawn`. Every change appends a dated line to `notes` (for example
+`2026-10-19 applied: Easy Apply`), so the column keeps the history of each application.
+Nothing else in the row is touched.
+
 ## Rescoring (`python -m jobs rescore`)
 
 ```bash

@@ -48,6 +48,8 @@ HEADER = [
     "notes",
 ]
 DEFAULT_STATUS = "new"
+# The application pipeline, in the order it usually moves. `jobs status --set` accepts these.
+STATUSES = ("new", "skipped", "draft", "applied", "replied", "interview", "offer", "rejected", "withdrawn")
 REASON_COLUMNS = ("seniority_match", "location_ok", "language_blocker", "team_type", "stack_fit")
 # Headers this file used before; a file with one of them is rewritten to HEADER on first read.
 LEGACY_HEADERS = [
@@ -193,6 +195,14 @@ def row_to_job(row: dict[str, str]) -> Job:
         pitch=row["pitch"],
         notes=row["notes"],
     )
+
+
+def set_status(row: dict[str, str], status: str, note: str = "", today: str | None = None) -> None:
+    """Change a row's status and append a dated line to its notes, keeping the earlier notes."""
+    today = today or date.today().isoformat()
+    row["status"] = status
+    entry = f"{today} {status}" + (f": {note}" if note else "")
+    row["notes"] = f"{row['notes']}\n{entry}" if row.get("notes") else entry
 
 
 def apply_scores(row: dict[str, str], job: Job) -> None:

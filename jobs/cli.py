@@ -416,6 +416,44 @@ def run_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_status(args: argparse.Namespace) -> int:
+    """Show or change the application status of rows in the CSV (the status and notes columns)."""
+    from collections import Counter
+
+    from jobs import export
+
+    csv_path = Path(args.csv)
+    try:
+        rows = export.read_rows(csv_path)
+    except export.HeaderMismatch as exc:
+        print(f"status: refused: {exc}")
+        return 1
+    if args.set:
+        if args.set not in export.STATUSES:
+            print(f"status: unknown status {args.set!r}; one of {', '.join(export.STATUSES)}")
+            return 1
+        if not args.job_ids:
+            print("status: --set needs at least one job_id")
+            return 1
+        by_id = {r["job_id"]: r for r in rows}
+        missing = [j for j in args.job_ids if j not in by_id]
+        if missing:
+            print(f"status: job_id not in {csv_path}: {', '.join(missing)}")
+            return 1
+        for job_id in args.job_ids:
+            export.set_status(by_id[job_id], args.set, args.note or "", args.date)
+            print(f"status: {job_id} -> {args.set}")
+        export.write_rows(csv_path, rows)
+        return 0
+    counts = Counter(r["status"] for r in rows)
+    print("status: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])))
+    for r in rows:
+        if r["status"] != export.DEFAULT_STATUS and (not args.job_ids or r["job_id"] in args.job_ids):
+            last = r["notes"].splitlines()[-1] if r["notes"] else ""
+            print(f"  {r['status']:<10} {r['job_id']:<22} {r['company']} - {r['title']}  {last}")
+    return 0
+
+
 def run_export(args: argparse.Namespace) -> int:
     from jobs import export
 
@@ -499,6 +537,14 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="append new jobs to the CSV openings list")
     _add_export_args(export)
     export.set_defaults(func=run_export)
+
+    status = sub.add_parser("status", help="show rows whose status is not new, or set the status of given job_ids")
+    status.add_argument("--csv", default="out/jobs.csv")
+    status.add_argument("--set", default=None, metavar="STATUS", help="new status for the given job_ids: new, skipped, draft, applied, replied, interview, offer, rejected, withdrawn")
+    status.add_argument("--note", default=None, help="text appended to notes with today's date and the status")
+    status.add_argument("--date", default=None, help="date for the notes line (default today, ISO 8601)")
+    status.add_argument("job_ids", nargs="*", help="rows to change (with --set) or to show")
+    status.set_defaults(func=run_status)
 
     rescore = sub.add_parser("rescore", help="score rows already in the CSV again (after profile.md or criteria.py changed)")
     rescore.add_argument("--csv", default="out/jobs.csv")

@@ -210,3 +210,31 @@ def test_explain_list_and_apply_round_trip(tmp_path, capsys):
     rows = {r["job_id"]: r for r in export.read_rows(csv_path)}
     assert rows["linkedin:1"]["strong_matches"] == "a; b" and rows["linkedin:1"]["pitch"] == "Hi"
     assert rows["linkedin:3"]["pitch"] == "done"
+
+
+def test_status_sets_rows_and_keeps_notes_history(tmp_path, capsys):
+    from jobs import export
+
+    csv_path = tmp_path / "jobs.csv"
+    export.export_jobs(csv_path, [_job("1", score=80, verdict="apply"), _job("2")])
+    rows = export.read_rows(csv_path)
+    rows[0]["notes"] = "cover letter sent"
+    export.write_rows(csv_path, rows)
+
+    args = argparse.Namespace(csv=str(csv_path), set="applied", note="Easy Apply", date="2026-10-19", job_ids=["linkedin:1"])
+    assert cli.run_status(args) == 0
+    rows = {r["job_id"]: r for r in export.read_rows(csv_path)}
+    assert rows["linkedin:1"]["status"] == "applied"
+    assert rows["linkedin:1"]["notes"] == "cover letter sent\n2026-10-19 applied: Easy Apply"
+    assert rows["linkedin:2"]["status"] == "new"
+
+    args = argparse.Namespace(csv=str(csv_path), set=None, note=None, date=None, job_ids=[])
+    assert cli.run_status(args) == 0
+    out = capsys.readouterr().out
+    assert "applied 1" in out and "new 1" in out and "linkedin:1" in out
+
+    args = argparse.Namespace(csv=str(csv_path), set="bogus", note=None, date=None, job_ids=["linkedin:1"])
+    assert cli.run_status(args) == 1
+    args = argparse.Namespace(csv=str(csv_path), set="applied", note=None, date=None, job_ids=["linkedin:9"])
+    assert cli.run_status(args) == 1
+    assert "not in" in capsys.readouterr().out
