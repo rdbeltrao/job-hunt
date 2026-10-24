@@ -34,6 +34,30 @@ JOB_WAIT_S = (3.0, 7.0)
 JOB_VIEW_URL = "https://www.linkedin.com/jobs/view/{job_id}/"
 DETAIL_WAIT_SELECTOR = "#job-details, .jobs-description__content, .jobs-description-content__text, .jobs-box__html-content"
 _SOURCE_ID_RE = re.compile(r"^linkedin:(\d+)$")
+_NOT_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_COMPANY_SUFFIX_RE = re.compile(r"\b(gmbh|ag|se|inc|llc|ltd|limited|co|kg|sa|sas|srl|bv|ab|oy|plc|group|labs?|technologies|technology|gmbh & co kg)\b")
+
+
+class WrongPosting(Exception):
+    """LinkedIn answered with another posting (the one asked for is gone), so nothing on the page is this job's."""
+
+
+def _company_key(name: str) -> str:
+    low = _NOT_ALNUM_RE.sub(" ", (name or "").lower())
+    low = _COMPANY_SUFFIX_RE.sub(" ", low)
+    return _NOT_ALNUM_RE.sub("", low)
+
+
+def same_company(row_company: str, page_company: str) -> bool:
+    """True when the page's company name is plausibly the row's (legal suffixes, punctuation and case ignored).
+
+    An empty page name is accepted: the 2023 markup sometimes hides it, and the URL
+    check in `open_job_page` already caught a redirect. A different name is not.
+    """
+    a, b = _company_key(row_company), _company_key(page_company)
+    if not a or not b:
+        return True
+    return a == b or a.startswith(b) or b.startswith(a) or a in b or b in a
 
 
 @dataclass(frozen=True)
@@ -104,7 +128,13 @@ def select_targets(
 
 
 def apply_detail(row: dict[str, str], detail, job: Job | None = None) -> bool:
-    """Copy the four fields from a parsed Detail into the row (and the Job). True when anything was found."""
+    """Copy the four fields from a parsed Detail into the row (and the Job). True when anything was found.
+
+    Raises WrongPosting when the page names another company: LinkedIn replaces a
+    removed posting with a recommended one, and that job's contact is not this row's.
+    """
+    if not same_company(row.get("company", ""), detail.company):
+        raise WrongPosting(f"page is for {detail.company!r}, row is {row.get('company')!r}")
     values = {
         "company_url": detail.company_url,
         "contact_name": detail.contact_name,
@@ -132,6 +162,8 @@ def open_job_page(context, source_id: str, dump_dir: Path | None = None) -> str:
     page.goto(JOB_VIEW_URL.format(job_id=source_id), wait_until="domcontentloaded")
     page.wait_for_timeout(random.randint(800, 1500))
     assert_logged_in(page)
+    if f"/jobs/view/{source_id}" not in page.url and f"currentJobId={source_id}" not in page.url:
+        raise WrongPosting(f"landed on {page.url}")
     try:
         page.wait_for_selector(DETAIL_WAIT_SELECTOR, timeout=8000)
     except Exception:  # noqa: BLE001 - an expired posting shows no description; the top card still carries the company

@@ -651,6 +651,11 @@ def run_backfill(args: argparse.Namespace) -> int:
                     failures.append(f"{target.job_id}: login required (landed on {exc})")
                     login_required = True
                     break
+                except backfill.WrongPosting as exc:
+                    opened += 1
+                    done.add(target.job_id)
+                    print(f"[backfill] {target.job_id}: posting gone ({exc})", file=sys.stderr)
+                    continue
                 except Exception as exc:  # noqa: BLE001 - keep going with the next posting
                     failures.append(f"{target.job_id}: {type(exc).__name__}: {exc}")
                     log.warning("backfill: %s failed: %s", target.job_id, exc)
@@ -659,7 +664,12 @@ def run_backfill(args: argparse.Namespace) -> int:
                 done.add(target.job_id)
                 detail = linkedin_browser.parse_detail(html)
                 row = rows_by_id[target.job_id]
-                if backfill.apply_detail(row, detail, jobs_by_id.get(target.job_id)):
+                try:
+                    hit = backfill.apply_detail(row, detail, jobs_by_id.get(target.job_id))
+                except backfill.WrongPosting as exc:
+                    print(f"[backfill] {target.job_id}: {row['company']}: posting gone ({exc})", file=sys.stderr)
+                    continue
+                if hit:
                     found += 1
                     who = f" {detail.contact_name} ({detail.contact_title})" if detail.contact_name else ""
                     print(f"[backfill] {target.job_id}: {row['company']}: {detail.company_url or 'no company page'}{who}", file=sys.stderr)

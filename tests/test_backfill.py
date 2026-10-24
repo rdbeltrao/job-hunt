@@ -48,6 +48,26 @@ def test_apply_detail_fills_row_and_job_only_when_something_was_found():
     assert job.contact_url == "https://www.linkedin.com/in/jane-doe/" and job.contact_title == "Recruiter"
 
 
+def test_same_company_ignores_suffixes_case_and_punctuation_but_not_another_company():
+    assert backfill.same_company("Intact", "Intact")
+    assert backfill.same_company("GTU Mobility GmbH & Co. KG", "GTU Mobility")
+    assert backfill.same_company("Tiger Data (creators of TimescaleDB)", "Tiger Data")
+    assert backfill.same_company("Grafana Labs", "Grafana")
+    assert backfill.same_company("Acme", "")  # the 2023 markup may hide the name
+    assert not backfill.same_company("Grafana Labs", "Consultrans")
+    assert not backfill.same_company("Canonical", "Distribusion Technologies")
+
+
+def test_apply_detail_refuses_a_page_for_another_company():
+    import pytest
+
+    row = _row(company="Grafana Labs")
+    detail = lb.Detail(company="Consultrans", company_url="https://www.linkedin.com/company/consultrans-sau/", contact_name="Elena", contact_url="https://www.linkedin.com/in/elena/")
+    with pytest.raises(backfill.WrongPosting):
+        backfill.apply_detail(row, detail)
+    assert row["company_url"] == "" and row["contact_name"] == ""
+
+
 def test_done_roundtrip_and_corrupt_file(tmp_path):
     path = tmp_path / "backfill.json"
     assert backfill.load_done(path) == set()
@@ -73,6 +93,13 @@ def test_export_fills_linkedin_columns_on_existing_rows_without_touching_the_res
     assert rows[2]["company_url"] == ""
     assert export.fill_linkedin_columns(path, jobs) == 0
 
+
+OTHER_COMPANY_HTML = """
+<div class="jobs-details">
+  <div class="job-details-jobs-unified-top-card__company-name"><a href="https://www.linkedin.com/company/other/life">Other Co</a></div>
+  <div class="hirer-card__hirer-information"><a href="https://www.linkedin.com/in/someone/"><strong>Some One</strong></a></div>
+</div>
+"""
 
 HIRER_HTML = """
 <div class="jobs-details">
@@ -103,7 +130,7 @@ def test_run_backfill_writes_csv_jsonl_and_done_file(tmp_path, monkeypatch, caps
 
     def fake_open(context, source_id, dump_dir=None):
         opened.append(source_id)
-        return HIRER_HTML if source_id == "1" else "<div></div>"
+        return {"1": HIRER_HTML, "2": OTHER_COMPANY_HTML}.get(source_id, "<div></div>")
 
     monkeypatch.setattr("jobs.browser.persistent_context", lambda headless=True: FakeContext())
     monkeypatch.setattr(backfill, "open_job_page", fake_open)
@@ -117,7 +144,9 @@ def test_run_backfill_writes_csv_jsonl_and_done_file(tmp_path, monkeypatch, caps
     rows = export.read_rows(csv_path)
     assert rows[0]["company_url"] == "https://www.linkedin.com/company/acme/" and rows[0]["contact_name"] == "Jane Doe" and rows[0]["contact_title"] == "Recruiter at Acme"
     assert rows[0]["status"] == "applied" and rows[0]["notes"] == "n"
-    assert rows[1]["company_url"] == "" and rows[2]["company_url"] == ""
+    assert rows[1]["company_url"] == "" and rows[1]["contact_name"] == ""  # LinkedIn served another company's posting
+    assert "linkedin:2: Acme: posting gone" in out.err
+    assert rows[2]["company_url"] == ""
     assert load_jobs(jobs_path)[0].contact_url == "https://www.linkedin.com/in/jane-doe/"
     assert load_jobs(jobs_path)[0].score == 70
     assert set(json.loads(done_path.read_text())) == {"linkedin:1", "linkedin:2"}

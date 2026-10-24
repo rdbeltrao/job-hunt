@@ -148,7 +148,7 @@ def parse_cards(list_html: str) -> list[Card]:
 def parse_detail(detail_html: str, now: datetime | None = None) -> Detail:
     soup = BeautifulSoup(detail_html, "html.parser")
     title = _text_first(soup, ".job-details-jobs-unified-top-card__job-title", "h1.t-24", "h1", "h2.jobs-details-top-card__job-title")
-    company = _text_first(soup, ".job-details-jobs-unified-top-card__company-name", ".jobs-unified-top-card__company-name", ".jobs-details-top-card__company-url")
+    company = _text_first(soup, ".job-details-jobs-unified-top-card__company-name", ".jobs-unified-top-card__company-name", ".jobs-details-top-card__company-url") or _company_name_from_link(soup)
     meta = _text_first(
         soup,
         ".job-details-jobs-unified-top-card__tertiary-description-container",
@@ -562,6 +562,17 @@ def _company_url(soup: BeautifulSoup) -> str:
         url = canonical_company_url(str(link.get("href", "")))
         if url:
             return url
+    return ""
+
+
+def _company_name_from_link(soup: BeautifulSoup) -> str:
+    """Text of the top card's company link on the 2026 markup ("Intact"), skipping follower counts and logos."""
+    for link in soup.select('a[href*="/company/"]'):
+        if not canonical_company_url(str(link.get("href", ""))):
+            continue
+        text = squash(link.get_text(" "))
+        if text and len(text) < 80 and not re.search(r"\bfollowers?\b|show more", text, re.I):
+            return text
     return ""
 
 
