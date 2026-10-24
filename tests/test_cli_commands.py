@@ -277,11 +277,12 @@ def test_pipeline_command_fails_clearly_without_a_data_root(tmp_path, monkeypatc
     assert "JOB_HUNT_DATA_ROOT" in capsys.readouterr().out
 
 
-def test_run_all_feeds_career_ops_right_after_fetch_when_a_data_root_is_given(monkeypatch, capsys):
+def test_run_all_feeds_career_ops_after_scoring_when_a_data_root_is_given(monkeypatch, capsys):
     calls: list[str] = []
     for name in ("fetch", "pipeline", "score", "export"):
         monkeypatch.setattr(cli, f"run_{name}", lambda args, name=name: calls.append(name) or 0)
 
     assert cli.run_all(argparse.Namespace(data_root="/tmp/root")) == 0
-    assert calls == ["fetch", "pipeline", "score", "export"]
+    # Scoring first, so every exported row carries its verdict and skips stay out.
+    assert calls == ["fetch", "score", "pipeline", "export"]
     assert "pipeline: ok" in capsys.readouterr().out
