@@ -295,15 +295,18 @@ class ExportResult:
     added: int
     skipped_existing: int
     written_jds: int
+    skipped_verdict: int = 0
 
 
-def export_to_data_root(jobs: list[Job], data_root: Path, today: str) -> ExportResult:
+def export_to_data_root(jobs: list[Job], data_root: Path, today: str, include_skips: bool = False) -> ExportResult:
     """Write the JD file, the index row and the Pending row for every job not yet in the data root.
 
     `today` (YYYY-MM-DD) is the `first_seen` of jobs that do not carry one. A URL
     found in `data/pipeline.md` or `data/jd-index.tsv` is skipped whole: no file,
     no index row, no pipeline row. Jobs without a description are exported too;
-    career-ops can fetch the posting itself.
+    career-ops can fetch the posting itself. A job `jobs score` marked `skip` stays
+    out unless `include_skips` is true: the verdict already answered the question
+    the pipeline exists to ask, and 250 skip rows bury the inbox.
     """
     data_root = Path(data_root)
     pipeline_path = data_root / PIPELINE_RELATIVE
@@ -315,8 +318,11 @@ def export_to_data_root(jobs: list[Job], data_root: Path, today: str) -> ExportR
 
     rows: list[str] = []
     index_rows: list[str] = []
-    written = skipped = 0
+    written = skipped = skipped_verdict = 0
     for job in jobs:
+        if not include_skips and job.verdict == "skip":
+            skipped_verdict += 1
+            continue
         url = sanitize_url(job.url)
         key = _url_key(url)
         if not url or key in seen:
@@ -346,4 +352,4 @@ def export_to_data_root(jobs: list[Job], data_root: Path, today: str) -> ExportR
         pipeline_path.parent.mkdir(parents=True, exist_ok=True)
         pipeline_path.write_text(insert_pending_rows(pipeline_text, rows), encoding="utf-8")
 
-    return ExportResult(added=len(rows), skipped_existing=skipped, written_jds=written)
+    return ExportResult(added=len(rows), skipped_existing=skipped, written_jds=written, skipped_verdict=skipped_verdict)

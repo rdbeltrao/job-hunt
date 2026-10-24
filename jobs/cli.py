@@ -616,23 +616,28 @@ def run_pipeline(args: argparse.Namespace) -> int:
     root = Path(data_root).expanduser()
     today = getattr(args, "date", None) or date.today().isoformat()
     try:
-        result = pipeline_md.export_to_data_root(jobs, root, today)
+        result = pipeline_md.export_to_data_root(jobs, root, today, include_skips=bool(getattr(args, "include_skips", False)))
     except OSError as exc:
         print(f"pipeline: failed: {type(exc).__name__}: {exc}")
         return 1
     print(
         f"pipeline: {result.added} rows added to {root / pipeline_md.PIPELINE_RELATIVE}, "
-        f"{result.skipped_existing} already there, {result.written_jds} JD files written"
+        f"{result.skipped_existing} already there, {result.skipped_verdict} skip verdicts left out, "
+        f"{result.written_jds} JD files written"
     )
     return 0
 
 
 def run_all(args: argparse.Namespace) -> int:
-    """fetch, (pipeline when a data root is given), score, export in order; each step runs even when the previous one failed."""
-    steps = [("fetch", run_fetch)]
+    """fetch, score, (pipeline when a data root is given), export in order; each step runs even when the previous one failed.
+
+    Scoring runs before the pipeline export so every exported row carries its Jev
+    verdict and the skip verdicts stay out of the career-ops inbox.
+    """
+    steps = [("fetch", run_fetch), ("score", run_score)]
     if getattr(args, "data_root", None):
         steps.append(("pipeline", run_pipeline))
-    steps += [("score", run_score), ("export", run_export)]
+    steps.append(("export", run_export))
     results: list[tuple[str, int]] = []
     for name, func in steps:
         print(f"\n=== {name} ===")
@@ -683,6 +688,7 @@ def _add_pipeline_args(p: argparse.ArgumentParser) -> None:
         help=f"career-ops data directory to feed (default from {settings.DATA_ROOT}); writes data/pipeline.md, data/jd-index.tsv and jds/feeder/",
     )
     p.add_argument("--date", default=None, help="first_seen for jobs that have none (default today, ISO 8601)")
+    p.add_argument("--include-skips", action="store_true", help="also export jobs whose Jev verdict is skip (left out by default)")
 
 
 def build_parser() -> argparse.ArgumentParser:

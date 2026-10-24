@@ -309,3 +309,18 @@ def test_jev_segment_lands_in_the_exported_pipeline(tmp_path):
     pipeline_md.export_to_data_root([_scored()], root, today="2026-10-24")
     pipeline = (root / "data" / "pipeline.md").read_text(encoding="utf-8")
     assert "| note: linkedin gerente-eng-germany-7d | jev: 79 apply — seniority match, location yes, language none, product, stack stack agnostic\n" in pipeline
+
+
+def test_skip_verdict_rows_stay_out_unless_asked(tmp_path):
+    skipped = _job(sid="900001", url="https://www.linkedin.com/jobs/view/900001/", score=12, verdict="skip")
+    unscored = _job(sid="900002", url="https://www.linkedin.com/jobs/view/900002/")
+    result = pipeline_md.export_to_data_root([skipped, unscored], tmp_path, "2026-10-24")
+    assert result.added == 1
+    assert result.skipped_verdict == 1
+    text = (tmp_path / "data" / "pipeline.md").read_text(encoding="utf-8")
+    assert "900001" not in text
+
+    result = pipeline_md.export_to_data_root([skipped], tmp_path, "2026-10-24", include_skips=True)
+    assert result.added == 1
+    assert result.skipped_verdict == 0
+    assert "900001" in (tmp_path / "data" / "pipeline.md").read_text(encoding="utf-8")
