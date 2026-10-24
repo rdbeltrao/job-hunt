@@ -599,9 +599,40 @@ def run_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_pipeline(args: argparse.Namespace) -> int:
+    """Feed career-ops: append new openings to data/pipeline.md, data/jd-index.tsv and jds/feeder/ in the data root."""
+    from datetime import date
+
+    from jobs import pipeline_md
+
+    data_root = getattr(args, "data_root", None) or settings.data_root()
+    if not data_root:
+        print(f"pipeline: skipped, no data root: pass --data-root or set {settings.DATA_ROOT} to the career-ops data directory.")
+        return 1
+    jobs = load_jobs(Path(args.jobs))
+    if not jobs:
+        print(f"pipeline: nothing to feed, {args.jobs} is empty or missing")
+        return 0
+    root = Path(data_root).expanduser()
+    today = getattr(args, "date", None) or date.today().isoformat()
+    try:
+        result = pipeline_md.export_to_data_root(jobs, root, today)
+    except OSError as exc:
+        print(f"pipeline: failed: {type(exc).__name__}: {exc}")
+        return 1
+    print(
+        f"pipeline: {result.added} rows added to {root / pipeline_md.PIPELINE_RELATIVE}, "
+        f"{result.skipped_existing} already there, {result.written_jds} JD files written"
+    )
+    return 0
+
+
 def run_all(args: argparse.Namespace) -> int:
-    """fetch, score, export in order; each step runs even when the previous one failed."""
-    steps = [("fetch", run_fetch), ("score", run_score), ("export", run_export)]
+    """fetch, (pipeline when a data root is given), score, export in order; each step runs even when the previous one failed."""
+    steps = [("fetch", run_fetch)]
+    if getattr(args, "data_root", None):
+        steps.append(("pipeline", run_pipeline))
+    steps += [("score", run_score), ("export", run_export)]
     results: list[tuple[str, int]] = []
     for name, func in steps:
         print(f"\n=== {name} ===")
@@ -642,6 +673,18 @@ def _add_export_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--csv", default="out/jobs.csv", help="CSV the openings list is appended to (default out/jobs.csv)")
 
 
+def _add_pipeline_args(p: argparse.ArgumentParser) -> None:
+    if not any(a.dest == "jobs" for a in p._actions):
+        p.add_argument("--jobs", default="out/jobs.jsonl")
+    p.add_argument(
+        "--data-root",
+        default=settings.data_root(),
+        metavar="PATH",
+        help=f"career-ops data directory to feed (default from {settings.DATA_ROOT}); writes data/pipeline.md, data/jd-index.tsv and jds/feeder/",
+    )
+    p.add_argument("--date", default=None, help="first_seen for jobs that have none (default today, ISO 8601)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="jobs", description="Fetch job postings into normalized records.")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
@@ -662,6 +705,10 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="append new jobs to the CSV openings list")
     _add_export_args(export)
     export.set_defaults(func=run_export)
+
+    pipeline = sub.add_parser("pipeline", help="feed career-ops: append new openings from out/jobs.jsonl to the data root's pipeline.md, jd-index.tsv and jds/feeder/")
+    _add_pipeline_args(pipeline)
+    pipeline.set_defaults(func=run_pipeline)
 
     status = sub.add_parser("status", help="show rows whose status is not new, or set the status of given job_ids")
     status.add_argument("--csv", default="out/jobs.csv")
@@ -719,10 +766,11 @@ def build_parser() -> argparse.ArgumentParser:
     engage.add_argument("--done", nargs="*", metavar="POST_URL", help="mark these post URLs as commented on")
     engage.set_defaults(func=run_engage)
 
-    run = sub.add_parser("run", help="fetch, score, export in one go (daily run)")
+    run = sub.add_parser("run", help="fetch, score, export in one go (daily run); with --data-root also feeds career-ops right after fetch")
     _add_fetch_args(run)
     _add_score_args(run)
     _add_export_args(run)
+    _add_pipeline_args(run)
     run.set_defaults(func=run_all)
     return parser
 

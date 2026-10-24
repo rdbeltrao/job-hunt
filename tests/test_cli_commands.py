@@ -238,3 +238,50 @@ def test_status_sets_rows_and_keeps_notes_history(tmp_path, capsys):
     args = argparse.Namespace(csv=str(csv_path), set="applied", note=None, date=None, job_ids=["linkedin:9"])
     assert cli.run_status(args) == 1
     assert "not in" in capsys.readouterr().out
+
+
+def test_pipeline_command_writes_the_career_ops_files(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("JOB_HUNT_DATA_ROOT", raising=False)
+    jobs_path = tmp_path / "jobs.jsonl"
+    save_jobs([_job(url="https://www.linkedin.com/jobs/view/1/", posted_date="2026-10-16", extra={"search": "em-berlin"})], jobs_path)
+    root = tmp_path / "root"
+
+    assert cli.main(["pipeline", "--jobs", str(jobs_path), "--data-root", str(root), "--date", "2026-10-24"]) == 0
+    out = capsys.readouterr().out
+    assert "pipeline: 1 rows added" in out and "0 already there" in out and "1 JD files written" in out
+    pipeline = (root / "data" / "pipeline.md").read_text(encoding="utf-8")
+    assert "- [ ] https://www.linkedin.com/jobs/view/1/ | Acme | EM | Berlin | posted: 2026-10-16 | note: linkedin em-berlin\n" in pipeline
+    assert (root / "data" / "jd-index.tsv").exists()
+    assert (root / "jds" / "feeder" / "linkedin-1.json").exists()
+
+    assert cli.main(["pipeline", "--jobs", str(jobs_path), "--data-root", str(root)]) == 0
+    assert "pipeline: 0 rows added" in capsys.readouterr().out
+
+
+def test_pipeline_command_reads_the_data_root_from_the_environment(tmp_path, monkeypatch, capsys):
+    jobs_path = tmp_path / "jobs.jsonl"
+    save_jobs([_job(url="https://www.linkedin.com/jobs/view/1/")], jobs_path)
+    root = tmp_path / "root"
+    monkeypatch.setenv("JOB_HUNT_DATA_ROOT", str(root))
+
+    assert cli.main(["pipeline", "--jobs", str(jobs_path)]) == 0
+    assert (root / "data" / "pipeline.md").exists()
+
+
+def test_pipeline_command_fails_clearly_without_a_data_root(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("JOB_HUNT_DATA_ROOT", raising=False)
+    jobs_path = tmp_path / "jobs.jsonl"
+    save_jobs([_job()], jobs_path)
+
+    assert cli.main(["pipeline", "--jobs", str(jobs_path)]) == 1
+    assert "JOB_HUNT_DATA_ROOT" in capsys.readouterr().out
+
+
+def test_run_all_feeds_career_ops_right_after_fetch_when_a_data_root_is_given(monkeypatch, capsys):
+    calls: list[str] = []
+    for name in ("fetch", "pipeline", "score", "export"):
+        monkeypatch.setattr(cli, f"run_{name}", lambda args, name=name: calls.append(name) or 0)
+
+    assert cli.run_all(argparse.Namespace(data_root="/tmp/root")) == 0
+    assert calls == ["fetch", "pipeline", "score", "export"]
+    assert "pipeline: ok" in capsys.readouterr().out

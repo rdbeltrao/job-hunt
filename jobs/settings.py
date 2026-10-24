@@ -29,6 +29,9 @@ EXPLAIN_MODEL = "JOB_HUNT_EXPLAIN_MODEL"
 # "llm" (chat model, default) or "jev" (OpenRouter decisions endpoint, needs the typesafe provider).
 SCORER = "JOB_HUNT_SCORER"
 SCORE_MODEL = "JOB_HUNT_SCORE_MODEL"
+# Optional: the career-ops data root `jobs pipeline` (and `jobs run --data-root`) feed. A path,
+# so it is read from the environment only, never from the Keychain.
+DATA_ROOT = "JOB_HUNT_DATA_ROOT"
 
 
 def env(name: str) -> str | None:
@@ -62,6 +65,12 @@ def openrouter_key() -> str | None:
         if value is not None:
             return value
     return None
+
+
+def data_root() -> str | None:
+    """The career-ops data root from JOB_HUNT_DATA_ROOT; None when unset or blank."""
+    value = os.environ.get(DATA_ROOT, "").strip()
+    return value or None
 
 
 def missing(*names: str) -> list[str]:

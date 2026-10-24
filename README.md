@@ -10,6 +10,7 @@ current; both are optional.
 
 ```bash
 uv run python -m jobs run        # fetch -> score -> export, with a summary at the end
+uv run python -m jobs run --data-root ~/Projects/job-hunt-private   # also feeds career-ops (see below)
 ```
 
 What you get per opening: title, company, location, workplace, posted date, link, full
@@ -82,6 +83,52 @@ Options:
 - `-v` before the subcommand turns on debug logging.
 
 Exit codes: 0 fine, 1 nothing fetched and something failed, 2 LinkedIn wants a login.
+
+## Feeding career-ops (`python -m jobs pipeline`)
+
+This repository is the LinkedIn feeder of a [career-ops](https://github.com/rdbeltrao/career-ops)
+install: the logged-in browser fetch lives here, scoring, tracking and drafting live
+there. `pipeline` hands every new opening in `out/jobs.jsonl` to the career-ops data
+root (the directory `CAREER_OPS_DATA_DIR` points at):
+
+```bash
+uv run python -m jobs pipeline --data-root ~/Projects/job-hunt-private
+uv run python -m jobs run --data-root ~/Projects/job-hunt-private     # fetch, pipeline, score, export
+export JOB_HUNT_DATA_ROOT=~/Projects/job-hunt-private                 # or put it in .env; then --data-root is optional
+```
+
+It writes three things, and nothing else in the data root:
+
+- `data/pipeline.md`: one row per new opening under `## Pending`, in the shape
+  `modes/pipeline.md` of career-ops defines:
+  `- [ ] {url} | {company} | {title} | {location} | {salary} | posted: {YYYY-MM-DD} | note: {source} {search_name}`.
+  The salary cell and the `posted:` segment appear only when known (a salary with no
+  location keeps an empty location cell); `note:` always names the source and the
+  search. A job that `jobs score` already scored also carries
+  `| jev: {score} {verdict} — seniority {..}, location {..}, language {..}, {team_type}, stack {..}`
+  (the reasons, underscores as spaces, at most 140 characters) after `note:`, so
+  career-ops's `jev-rank.mjs` keeps that row instead of scoring it again; an unscored
+  job gets no segment. Cells are sanitised like career-ops's own scanner: whitespace collapsed,
+  `|` turned into `/` (`%7C` in the URL), `[` and `]` escaped. The file is created
+  from a `# Pipeline` / `## Pending` / `## Processed` skeleton when missing; an
+  existing file keeps its language and its other sections.
+- `jds/feeder/{source}-{source_id}.json`: the job as stored in `out/jobs.jsonl`
+  (title, company, location, workplace, seniority, posted date, URL, description,
+  salary) plus `first_seen` and `search_name`, so `jev-score.mjs` and `jev-rank.mjs`
+  can score the posting without fetching it.
+- `data/jd-index.tsv`: `url`, `path` (relative to the data root), `source`,
+  `source_id`, `first_seen`; append-only, one row per URL.
+
+The command is idempotent: a URL already on any checkbox row of `data/pipeline.md`
+(Pending or Processed) or in `data/jd-index.tsv` is skipped, so running it twice over
+the same `out/jobs.jsonl` adds no row and no file. It never edits or removes a row.
+Jobs without a description are exported too; career-ops can fetch the posting itself.
+`--date` sets `first_seen` for jobs that have none (default today).
+
+With career-ops in place, `score`, `explain`, `export`, `status`, `network` and
+`outreach` are superseded by its modes (`jev-rank.mjs`, the A-H report,
+`data/applications.md`, `network-plan.mjs`) and stay here only for the CSV workflow
+described below. `login`, `fetch`, `engage` and `pipeline` are the feeder's job.
 
 ## Scoring (`python -m jobs score`)
 
@@ -285,6 +332,9 @@ JOB_HUNT_EXPLAIN_MODEL=anthropic/claude-sonnet-5.5
 # Optional: scorer and fallback model (`python -m jobs score`); jev is the default, llm the fallback
 JOB_HUNT_SCORER=jev
 JOB_HUNT_SCORE_MODEL=anthropic/claude-haiku-5.5
+
+# Optional: career-ops data root fed by `python -m jobs pipeline` (a path, read from the environment only)
+JOB_HUNT_DATA_ROOT=
 ```
 
 With a variable unset, the step that needs it prints which variable is missing and is
@@ -372,6 +422,7 @@ jobs/seen.py                out/seen_ids.json store
 jobs/store.py               out/jobs.jsonl read/write (hand-off between fetch, score, export)
 jobs/settings.py            env vars, .env loading
 jobs/export.py              CSV export (out/jobs.csv, append-only)
+jobs/pipeline_md.py         career-ops feeder: data/pipeline.md rows, jd-index.tsv, jds/feeder/*.json (jobs pipeline)
 jobs/scoring/criteria.py    the questions and wording Jev and Claude get; tune here
 jobs/scoring/jev.py         Jev scorer (OpenRouter decisions endpoint) and shared result type
 jobs/scoring/llm.py         chat-model scorer (OpenRouter chat completions, default)
@@ -386,6 +437,6 @@ jobs/network.py             weekly connection plan from the CSV (jobs network)
 jobs/outreach.py            outreach pack for one opening (jobs outreach)
 jobs/engage.py              creators.yaml, engaged posts store, comment hand-off (jobs engage)
 jobs/adapters/linkedin_activity.py  logged-in reader of a member's recent posts
-jobs/cli.py                 login, fetch, score, export, status, rescore, explain, network, outreach, engage, run
+jobs/cli.py                 login, fetch, pipeline, score, export, status, rescore, explain, network, outreach, engage, run
 tests/                      fixtures and fakes only: no network, no browser, no API keys
 ```
