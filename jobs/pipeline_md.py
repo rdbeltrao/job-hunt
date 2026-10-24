@@ -14,6 +14,11 @@ per job, following two contracts from the consolidation plan:
   The positional cells stop after `{location}` when there is no salary; a salary
   with no location keeps an empty location cell. `posted:` is omitted when the
   posting date is unknown; `note:` is always there.
+- C4, the Jev segment: a job `jobs score` already scored also carries
+  `| jev: {score} {verdict} — {reasons}` after `note:`, so `jev-rank.mjs` keeps the
+  row instead of scoring it again. `reasons` is `seniority {v}, location {v},
+  language {v}, {team_type}, stack {v}`, underscores as spaces, at most 140
+  characters. An unscored job gets no segment.
 
 Field sanitising mirrors `sanitizeMarkdownField` and `sanitizePipelineUrl` in
 career-ops `scan.mjs`: whitespace runs and line breaks collapse to one space, `|`
@@ -69,6 +74,10 @@ _URL_RE = re.compile(r"https?://[^\s|]+")
 _POSTED_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 _MARKDOWN_ESCAPES = {"\\": "\\\\", "[": "\\[", "]": "\\]"}
 _UNSAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]")
+# The five reason answers jobs/scoring/criteria.py asks for, in the order the segment lists them.
+JEV_REASON_KEYS = ("seniority_match", "location_ok", "language_blocker", "team_type", "stack_fit")
+JEV_REASON_LABELS = {"seniority_match": "seniority", "location_ok": "location", "language_blocker": "language", "team_type": "", "stack_fit": "stack"}
+JEV_REASONS_MAX_CHARS = 140
 
 
 def _fold(text: str) -> str:
@@ -147,7 +156,26 @@ def format_pipeline_line(job: Job, search_name: str = "") -> str:
     if posted:
         line = f"{line} | posted: {posted.group(1)}"
     note = sanitize_field(f"{job.source} {_search_name(job, search_name)}".strip())
-    return f"{line} | note: {note}"
+    line = f"{line} | note: {note}"
+    jev = format_jev_segment(job)
+    return f"{line} | {jev}" if jev else line
+
+
+def format_jev_segment(job: Job) -> str:
+    """`jev: {score} {verdict} — {reasons}` for a job jobs score already scored, else "" (contract C4)."""
+    scoring = job.scoring if isinstance(job.scoring, dict) else {}
+    if job.score is None or not job.verdict:
+        return ""
+    answers = {key: _normalize_scalar(scoring.get(key)) for key in JEV_REASON_KEYS}
+    if not all(answers.values()):
+        return ""
+    parts = []
+    for key in JEV_REASON_KEYS:
+        value = answers[key].replace("_", " ")
+        label = JEV_REASON_LABELS[key]
+        parts.append(f"{label} {value}" if label else value)
+    reasons = sanitize_field(", ".join(parts)[:JEV_REASONS_MAX_CHARS])
+    return f"jev: {sanitize_field(job.score)} {sanitize_field(job.verdict)} — {reasons}"
 
 
 def jd_relative_path(job: Job) -> str:

@@ -104,7 +104,11 @@ It writes three things, and nothing else in the data root:
   `- [ ] {url} | {company} | {title} | {location} | {salary} | posted: {YYYY-MM-DD} | note: {source} {search_name}`.
   The salary cell and the `posted:` segment appear only when known (a salary with no
   location keeps an empty location cell); `note:` always names the source and the
-  search. Cells are sanitised like career-ops's own scanner: whitespace collapsed,
+  search. A job that `jobs score` already scored also carries
+  `| jev: {score} {verdict} — seniority {..}, location {..}, language {..}, {team_type}, stack {..}`
+  (the reasons, underscores as spaces, at most 140 characters) after `note:`, so
+  career-ops's `jev-rank.mjs` keeps that row instead of scoring it again; an unscored
+  job gets no segment. Cells are sanitised like career-ops's own scanner: whitespace collapsed,
   `|` turned into `/` (`%7C` in the URL), `[` and `]` escaped. The file is created
   from a `# Pipeline` / `## Pending` / `## Processed` skeleton when missing; an
   existing file keeps its language and its other sections.

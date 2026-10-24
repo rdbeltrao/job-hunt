@@ -257,3 +257,55 @@ def test_first_seen_keeps_the_job_value_when_set(tmp_path):
     assert index[1].endswith("\t2026-10-10")
     jd = json.loads((root / "jds" / "feeder" / "linkedin-4477094289.json").read_text(encoding="utf-8"))
     assert jd["first_seen"] == "2026-10-10"
+
+
+# ── Jev segment (C4) ───────────────────────────────────────────────────
+
+
+def _scored(**kw) -> Job:
+    scoring = {
+        "model": "typesafe/jev-1.13",
+        "seniority_match": "match",
+        "location_ok": "yes",
+        "language_blocker": "none",
+        "team_type": "product",
+        "stack_fit": "stack_agnostic",
+        "confidences": {"seniority_match": 0.91},
+    }
+    scoring.update(kw.pop("scoring", {}))
+    return _job(score=kw.pop("score", 79), verdict=kw.pop("verdict", "apply"), scoring=scoring, **kw)
+
+
+def test_scored_job_carries_the_jev_segment_after_note():
+    line = pipeline_md.format_pipeline_line(_scored())
+    assert line == (
+        "- [ ] https://www.linkedin.com/jobs/view/4477094289/ | Acme GmbH | Engineering Manager"
+        " | Berlin, Germany | posted: 2026-10-16 | note: linkedin gerente-eng-germany-7d"
+        " | jev: 79 apply — seniority match, location yes, language none, product, stack stack agnostic"
+    )
+
+
+def test_unscored_job_has_no_jev_segment():
+    assert "jev:" not in pipeline_md.format_pipeline_line(_job())
+    # `score` without a description: verdict maybe, no score, no segment.
+    assert "jev:" not in pipeline_md.format_pipeline_line(_job(verdict="maybe", notes="no description"))
+    # A verdict and score but reasons missing: no segment either.
+    assert "jev:" not in pipeline_md.format_pipeline_line(_job(score=50, verdict="maybe", scoring={"model": "x"}))
+
+
+def test_jev_segment_never_contains_a_pipe_and_is_capped():
+    job = _scored(scoring={"team_type": "a|b [c]", "stack_fit": "x" * 300})
+    segment = pipeline_md.format_jev_segment(job)
+    assert segment.startswith("jev: 79 apply — seniority match, location yes, language none, a/b \\[c\\], stack ")
+    assert "|" not in segment
+    reasons = segment.split(" — ", 1)[1]
+    assert len(reasons) <= 140 + reasons.count("\\")
+    line = pipeline_md.format_pipeline_line(job)
+    assert line.count("| jev: ") == 1 and line.endswith(segment)
+
+
+def test_jev_segment_lands_in_the_exported_pipeline(tmp_path):
+    root = tmp_path / "root"
+    pipeline_md.export_to_data_root([_scored()], root, today="2026-10-24")
+    pipeline = (root / "data" / "pipeline.md").read_text(encoding="utf-8")
+    assert "| note: linkedin gerente-eng-germany-7d | jev: 79 apply — seniority match, location yes, language none, product, stack stack agnostic\n" in pipeline
