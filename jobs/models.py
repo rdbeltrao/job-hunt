@@ -19,6 +19,12 @@ class Job:
     url: str
     description: str
     salary: str | None = None
+    # LinkedIn only: the company page, and the person from "Meet the hiring team" who can
+    # be messaged (InMail). All empty when the posting shows none.
+    company_url: str = ""
+    contact_name: str = ""
+    contact_title: str = ""
+    contact_url: str = ""
     extra: dict = field(default_factory=dict)
     # Filled by `jobs score` / `jobs score --explain`; empty until then.
     first_seen: str = ""

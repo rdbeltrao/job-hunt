@@ -41,12 +41,16 @@ class Opening:
     url: str
     verdict: str
     status: str
+    contact_name: str = ""  # the hiring-team person the posting showed, when any
+    contact_title: str = ""
+    contact_url: str = ""
 
 
 @dataclass
 class CompanyPlan:
     company: str
     openings: list[Opening] = field(default_factory=list)
+    company_url: str = ""  # the LinkedIn company page when a posting linked it, else ""
 
     @property
     def score(self) -> int:
@@ -108,7 +112,19 @@ def rank_companies(rows: list[dict[str, str]], done: dict[str, str] | None = Non
         if verdict not in INTERESTING_VERDICTS and status not in ACTIVE_STATUSES:
             continue
         plan = plans.setdefault(company.lower(), CompanyPlan(company=company))
-        plan.openings.append(Opening(r.get("job_id", ""), r.get("title", ""), r.get("url", ""), verdict, status))
+        plan.company_url = plan.company_url or (r.get("company_url") or "").strip()
+        plan.openings.append(
+            Opening(
+                r.get("job_id", ""),
+                r.get("title", ""),
+                r.get("url", ""),
+                verdict,
+                status,
+                contact_name=(r.get("contact_name") or "").strip(),
+                contact_title=(r.get("contact_title") or "").strip(),
+                contact_url=(r.get("contact_url") or "").strip(),
+            )
+        )
     return sorted(plans.values(), key=lambda p: (-p.score, p.company.lower()))
 
 
@@ -154,7 +170,11 @@ def render_plan(
         for o in plan.openings[:3]:
             state = o.status if o.status and o.status != "new" else o.verdict
             lines.append(f"- {o.title} [{state}]({o.url})" if o.url else f"- {o.title} [{state}]")
-        lines.append(f"- [ ] Follow the company page: {company_search_url(plan.company)}")
+        for o in plan.openings:
+            if o.contact_url:
+                who = f"{o.contact_name} ({o.contact_title})" if o.contact_title else o.contact_name
+                lines.append(f"- [ ] Message the job poster of {o.title}: {who} {o.contact_url}")
+        lines.append(f"- [ ] Follow the company page: {plan.company_url or company_search_url(plan.company)}")
         for role in roles:
             lines.append(f"- [ ] {role}: {people_search_url(plan.company, role)}")
         lines.append("")

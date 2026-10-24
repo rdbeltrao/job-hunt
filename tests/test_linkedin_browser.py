@@ -44,6 +44,139 @@ def test_parse_detail_reads_title_company_location_pills_description(fixture_tex
 def test_parse_detail_on_empty_html_returns_blank_detail():
     d = lb.parse_detail("<div></div>")
     assert d.title == "" and d.description == "" and d.workplace is None and d.pills == []
+    assert d.company_url == "" and d.contact_name == "" and d.contact_title == "" and d.contact_url == ""
+
+
+def test_parse_detail_reads_company_page_from_top_card(fixture_text):
+    d = lb.parse_detail(fixture_text("linkedin_browser_detail.html"))
+    assert d.company_url == "https://www.linkedin.com/company/momox/"  # "/life" tab dropped
+
+    real = lb.parse_detail(fixture_text("linkedin_browser_detail_real.html"), now=NOW)
+    assert real.company_url == "https://www.linkedin.com/company/gtu-mobility-gmbh-&-co.-kg/"
+
+
+def test_parse_detail_without_hiring_team_leaves_contact_blank(fixture_text):
+    d = lb.parse_detail(fixture_text("linkedin_browser_detail.html"))
+    assert d.contact_name == "" and d.contact_title == "" and d.contact_url == ""
+
+
+HIRER_CARD_HTML = """
+<div class="scaffold-layout__detail">
+  <div class="job-details-jobs-unified-top-card__company-name">
+    <a class="app-aware-link" href="https://www.linkedin.com/company/acme-gmbh/life?trk=x">Acme GmbH</a>
+  </div>
+  <div id="job-details"><p>About the job Build things.</p></div>
+  <div class="job-details-people-who-can-help__section--two-pane">
+    <h2 class="text-heading-medium mb4">Meet the hiring team</h2>
+    <div class="display-flex align-items-center mt4">
+      <a class="app-aware-link" href="https://www.linkedin.com/in/jane-doe?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AABC" target="_self">
+        <img alt="Jane Doe" src="https://media.licdn.com/x.jpg">
+      </a>
+      <div class="hirer-card__hirer-information">
+        <a class="app-aware-link" href="https://www.linkedin.com/in/jane-doe?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AABC" target="_self">
+          <strong>Jane Doe</strong>
+          <span class="hirer-card__connection-degree"> · 3rd</span>
+        </a>
+        <div class="hirer-card__hirer-job-title t-14 t-black--light">Talent Acquisition Manager at Acme GmbH</div>
+        <div class="hirer-card__hirer-job-poster t-12">Job poster</div>
+      </div>
+      <div class="hirer-card__message-button">
+        <button aria-label="Message Jane Doe" class="artdeco-button"><span class="artdeco-button__text">Message</span></button>
+      </div>
+    </div>
+  </div>
+  <div class="job-details-similar-jobs">
+    <a href="https://www.linkedin.com/company/other-co/">Other Co</a>
+    <a href="https://www.linkedin.com/in/someone-else/">Someone Else</a>
+  </div>
+</div>
+"""
+
+
+def test_parse_detail_reads_hiring_team_contact_and_message_target():
+    d = lb.parse_detail(HIRER_CARD_HTML, now=NOW)
+
+    assert d.company_url == "https://www.linkedin.com/company/acme-gmbh/"  # top card wins over similar jobs
+    assert d.contact_name == "Jane Doe"  # connection degree dropped
+    assert d.contact_title == "Talent Acquisition Manager at Acme GmbH"
+    assert d.contact_url == "https://www.linkedin.com/in/jane-doe/"  # miniProfileUrn query dropped
+
+
+def test_parse_detail_reads_older_jobs_poster_markup():
+    html = """
+    <div class="jobs-details">
+      <div class="jobs-poster">
+        <div class="jobs-poster__wrapper">
+          <a href="/in/max-mustermann/" class="jobs-poster__name-link">
+            <span class="jobs-poster__name">Max Mustermann</span>
+          </a>
+          <div class="jobs-poster__headline">Engineering Lead at Beta</div>
+          <button>Message</button>
+        </div>
+      </div>
+    </div>
+    """
+    d = lb.parse_detail(html, now=NOW)
+    assert d.contact_name == "Max Mustermann"
+    assert d.contact_title == "Engineering Lead at Beta"
+    assert d.contact_url == "https://www.linkedin.com/in/max-mustermann/"  # relative href gets the LinkedIn origin
+
+
+def test_parse_detail_ignores_people_you_can_reach_out_to_without_a_hirer_card():
+    html = """
+    <div class="scaffold-layout__detail">
+      <div class="job-details-people-who-can-help__section">
+        <h2>People you can reach out to</h2>
+        <a href="https://www.linkedin.com/in/old-colleague/"><strong>Old Colleague</strong></a>
+        <div class="t-black--light">Engineer at Acme</div>
+      </div>
+    </div>
+    """
+    d = lb.parse_detail(html, now=NOW)
+    assert d.contact_name == "" and d.contact_url == ""
+
+
+def test_parse_detail_hirer_card_without_profile_link_is_not_a_contact():
+    html = """
+    <div class="scaffold-layout__detail">
+      <div class="job-details-people-who-can-help__section">
+        <h2>Meet the hiring team</h2>
+        <div class="hirer-card__hirer-information"><strong>LinkedIn Member</strong>
+          <div class="hirer-card__hirer-job-title">Recruiter</div>
+        </div>
+      </div>
+    </div>
+    """
+    d = lb.parse_detail(html, now=NOW)
+    assert d.contact_name == "" and d.contact_title == "" and d.contact_url == ""
+
+
+@pytest.mark.parametrize(
+    ("href", "expected"),
+    [
+        ("https://www.linkedin.com/company/momox/life", "https://www.linkedin.com/company/momox/"),
+        ("https://www.linkedin.com/company/momox/?trk=x", "https://www.linkedin.com/company/momox/"),
+        ("https://de.linkedin.com/company/acme-gmbh", "https://de.linkedin.com/company/acme-gmbh/"),
+        ("/company/acme-gmbh/jobs/", "https://www.linkedin.com/company/acme-gmbh/"),
+        ("https://www.linkedin.com/jobs/view/1/", ""),
+        ("", ""),
+    ],
+)
+def test_canonical_company_url(href, expected):
+    assert lb.canonical_company_url(href) == expected
+
+
+@pytest.mark.parametrize(
+    ("href", "expected"),
+    [
+        ("https://www.linkedin.com/in/jane-doe?miniProfileUrn=abc", "https://www.linkedin.com/in/jane-doe/"),
+        ("/in/jane-doe/", "https://www.linkedin.com/in/jane-doe/"),
+        ("https://www.linkedin.com/company/acme/", ""),
+        ("", ""),
+    ],
+)
+def test_canonical_profile_url(href, expected):
+    assert lb.canonical_profile_url(href) == expected
 
 
 def test_build_job_merges_card_and_detail(fixture_text):
@@ -61,6 +194,21 @@ def test_build_job_merges_card_and_detail(fixture_text):
     assert job.posted_date == "2026-10-15"
     assert job.extra["search"] == "em-germany-24h"
     assert job.extra["employment_type"] == "Full-time"
+    assert job.company_url == "https://www.linkedin.com/company/momox/"
+    assert job.contact_name == "" and job.contact_url == ""
+
+
+def test_build_job_carries_company_page_and_contact(fixture_text):
+    card = lb.parse_cards(fixture_text("linkedin_browser_list.html"))[0]
+    detail = lb.parse_detail(HIRER_CARD_HTML, now=NOW)
+
+    job = lb.build_job(card, detail, "s")
+
+    assert job.company_url == "https://www.linkedin.com/company/acme-gmbh/"
+    assert job.contact_name == "Jane Doe"
+    assert job.contact_title == "Talent Acquisition Manager at Acme GmbH"
+    assert job.contact_url == "https://www.linkedin.com/in/jane-doe/"
+    assert job.to_dict()["contact_url"] == "https://www.linkedin.com/in/jane-doe/"  # lands in jobs.jsonl
 
 
 def test_build_job_without_detail_falls_back_to_card_and_text_heuristic(fixture_text):

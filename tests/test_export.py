@@ -122,7 +122,7 @@ def test_rows_round_trip_and_rescore_helpers(tmp_path):
 
 def test_legacy_csv_is_migrated_once(tmp_path, capsys):
     path = tmp_path / "jobs.csv"
-    legacy = [c for c in export.HEADER if c not in export.REASON_COLUMNS]
+    legacy = [c for c in export.HEADER if c not in export.REASON_COLUMNS and c not in export.LINKEDIN_COLUMNS]
     with path.open("w", newline="", encoding=export.ENCODING) as fh:
         w = csv.writer(fh)
         w.writerow(legacy)
@@ -132,8 +132,46 @@ def test_legacy_csv_is_migrated_once(tmp_path, capsys):
     assert _read(path)[0] == export.HEADER
     assert rows[0]["job_id"] == "linkedin:1" and rows[0]["status"] == "applied" and rows[0]["pitch"] == "p"
     assert rows[0]["team_type"] == "" and rows[0]["stack_fit"] == ""
+    assert rows[0]["company_url"] == "" and rows[0]["contact_url"] == ""
     export.read_rows(path)
     assert "migrated" not in capsys.readouterr().out
+
+
+def test_csv_without_linkedin_columns_is_migrated(tmp_path, capsys):
+    path = tmp_path / "jobs.csv"
+    legacy = [c for c in export.HEADER if c not in export.LINKEDIN_COLUMNS]
+    row = {c: "" for c in legacy}
+    row.update(job_id="linkedin:1", url="u", description="d", score="70", verdict="apply", status="applied", stack_fit="required_match")
+    with path.open("w", newline="", encoding=export.ENCODING) as fh:
+        w = csv.writer(fh)
+        w.writerow(legacy)
+        w.writerow([row[c] for c in legacy])
+    rows = export.read_rows(path)
+    assert "migrated" in capsys.readouterr().out
+    assert _read(path)[0] == export.HEADER
+    assert rows[0]["job_id"] == "linkedin:1" and rows[0]["status"] == "applied" and rows[0]["stack_fit"] == "required_match"
+    assert rows[0]["company_url"] == "" and rows[0]["contact_name"] == ""
+
+
+def test_linkedin_company_and_contact_land_in_their_columns_and_round_trip(tmp_path):
+    path = tmp_path / "jobs.csv"
+    job = _job(
+        "1",
+        company_url="https://www.linkedin.com/company/acme/",
+        contact_name="Jane Doe",
+        contact_title="Talent Acquisition Manager",
+        contact_url="https://www.linkedin.com/in/jane-doe/",
+    )
+    export.export_jobs(path, [job, _job("2")])
+    rows = export.read_rows(path)
+    assert rows[0]["company_url"] == "https://www.linkedin.com/company/acme/"
+    assert rows[0]["contact_name"] == "Jane Doe"
+    assert rows[0]["contact_title"] == "Talent Acquisition Manager"
+    assert rows[0]["contact_url"] == "https://www.linkedin.com/in/jane-doe/"
+    assert rows[1]["company_url"] == "" and rows[1]["contact_url"] == ""
+    rebuilt = export.row_to_job(rows[0])
+    assert rebuilt.company_url == job.company_url and rebuilt.contact_url == job.contact_url
+    assert rebuilt.contact_name == "Jane Doe" and rebuilt.contact_title == "Talent Acquisition Manager"
 
 
 def test_reason_columns_come_from_scoring(tmp_path):

@@ -32,6 +32,10 @@ HEADER = [
     "seniority",
     "salary",
     "url",
+    "company_url",
+    "contact_name",
+    "contact_title",
+    "contact_url",
     "description",
     "score",
     "verdict",
@@ -51,9 +55,12 @@ DEFAULT_STATUS = "new"
 # The application pipeline, in the order it usually moves. `jobs status --set` accepts these.
 STATUSES = ("new", "skipped", "draft", "applied", "replied", "interview", "offer", "rejected", "withdrawn")
 REASON_COLUMNS = ("seniority_match", "location_ok", "language_blocker", "team_type", "stack_fit")
+# LinkedIn company page and the hiring-team contact who can be messaged; empty for other sources.
+LINKEDIN_COLUMNS = ("company_url", "contact_name", "contact_title", "contact_url")
 # Headers this file used before; a file with one of them is rewritten to HEADER on first read.
 LEGACY_HEADERS = [
-    [c for c in HEADER if c not in REASON_COLUMNS],
+    [c for c in HEADER if c not in REASON_COLUMNS and c not in LINKEDIN_COLUMNS],
+    [c for c in HEADER if c not in LINKEDIN_COLUMNS],
 ]
 
 
@@ -108,6 +115,10 @@ def job_to_row(job: Job, today: str | None = None) -> list:
         job.seniority,
         job.salary or "",
         job.url,
+        job.company_url or "",
+        job.contact_name or "",
+        job.contact_title or "",
+        job.contact_url or "",
         job.description or "",
         "" if job.score is None else job.score,
         job.verdict,
@@ -186,6 +197,10 @@ def row_to_job(row: dict[str, str]) -> Job:
         url=row["url"],
         description=row["description"],
         salary=row["salary"] or None,
+        company_url=row.get("company_url", ""),
+        contact_name=row.get("contact_name", ""),
+        contact_title=row.get("contact_title", ""),
+        contact_url=row.get("contact_url", ""),
         extra={"search": row["search_name"]},
         first_seen=row["first_seen"],
         # Explanations are kept: a rescore changes the score and reasons, not the write-ups.

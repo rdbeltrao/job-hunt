@@ -78,6 +78,7 @@ def build_pack(row: dict[str, str], profile: str) -> dict:
             "location": row.get("location", ""),
             "workplace": row.get("workplace", ""),
             "url": row.get("url", ""),
+            "company_url": row.get("company_url", ""),
             "score": row.get("score", ""),
             "verdict": row.get("verdict", ""),
             "status": row.get("status", ""),
@@ -86,11 +87,18 @@ def build_pack(row: dict[str, str], profile: str) -> dict:
             "pitch": row.get("pitch", ""),
             "description": (row.get("description") or "")[:MAX_DESCRIPTION_CHARS],
         },
+        # The person LinkedIn shows under "Meet the hiring team", when the posting had one:
+        # write to them first (InMail or a connection note), before searching for others.
+        "contact": (
+            {"name": row.get("contact_name", ""), "title": row.get("contact_title", ""), "url": row.get("contact_url", "")}
+            if row.get("contact_url")
+            else None
+        ),
         "find_people": {
             kind: [{"role": role, "url": people_search_url(company, role)} for role in roles]
             for kind, roles in PEOPLE_TO_FIND.items()
         },
-        "company_page_search": f"https://www.linkedin.com/search/results/companies/?keywords={quote_plus(company)}",
+        "company_page_search": row.get("company_url") or f"https://www.linkedin.com/search/results/companies/?keywords={quote_plus(company)}",
         "job_posts_search": job_posts_search_url(title),
         "message_types": MESSAGE_TYPES,
     }

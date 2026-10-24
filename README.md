@@ -16,7 +16,9 @@ uv run python -m jobs run --data-root ~/Projects/job-hunt-private   # also feeds
 What you get per opening: title, company, location, workplace, posted date, link, full
 description, a fit score from 0 to 100, a verdict (apply / maybe / skip), five typed
 reasons (seniority, location, language, team type, stack fit), and room for your own
-status and notes.
+status and notes. LinkedIn postings also carry the company's LinkedIn page and, when the
+posting shows a "Meet the hiring team" card, the person you can message (InMail): name,
+headline and profile link.
 
 ## Make it yours
 
@@ -114,8 +116,9 @@ It writes three things, and nothing else in the data root:
   existing file keeps its language and its other sections.
 - `jds/feeder/{source}-{source_id}.json`: the job as stored in `out/jobs.jsonl`
   (title, company, location, workplace, seniority, posted date, URL, description,
-  salary) plus `first_seen` and `search_name`, so `jev-score.mjs` and `jev-rank.mjs`
-  can score the posting without fetching it.
+  salary, and for LinkedIn `company_url`, `contact_name`, `contact_title`,
+  `contact_url`) plus `first_seen` and `search_name`, so `jev-score.mjs` and
+  `jev-rank.mjs` can score the posting without fetching it.
 - `data/jd-index.tsv`: `url`, `path` (relative to the data root), `source`,
   `source_id`, `first_seen`; append-only, one row per URL.
 
@@ -231,7 +234,9 @@ uv run python -m jobs network --done "Acme GmbH" "Beta Co"           # covered; 
 Ranks the companies in `out/jobs.csv` worth connecting at (an application in progress
 first, then apply verdicts, then maybes, counts capped so a company posting the same role
 in twenty cities does not win) and writes a Markdown checklist: per company the company
-page search and a people search per role family (`--roles`, default Engineering Manager,
+page (the LinkedIn page the posting linked, or a company search when none did), a line
+per job poster the posting showed ("Message the job poster of ...", with the profile
+link), and a people search per role family (`--roles`, default Engineering Manager,
 Head of Engineering, VP Engineering, CTO, Technical Recruiter), with the weekly budget
 (`--quota`, default 100 invitations). Covered companies are kept in `out/network.json`.
 
@@ -241,9 +246,11 @@ Head of Engineering, VP Engineering, CTO, Technical Recruiter), with the weekly 
 uv run python -m jobs outreach linkedin:4477094289 --out out/outreach-4477094289.json
 ```
 
-Writes the pack for one message about one opening: the job row, `profile.md`, LinkedIn
-people searches for the hiring manager, the recruiter and possible referrers at that
-company, the posts search for the role, and the paragraph structure of each message type
+Writes the pack for one message about one opening: the job row (with the company's
+LinkedIn page when known), `contact` (the hiring-team person the posting showed, with
+name, headline and profile link, or `null`; write to them first), LinkedIn people
+searches for the hiring manager, the recruiter and possible referrers at that company,
+the posts search for the role, and the paragraph structure of each message type
 (recruiter or hiring manager, referral, networking, connection note). Whoever writes the
 message (a Claude session, or you) reads it; the CSV is not touched. Record the contact
 afterwards with `jobs status --note "outreach: <person, role>" <job_id>`.
@@ -295,12 +302,17 @@ file has a different header the export refuses to touch it. Columns:
 
 ```
 job_id, first_seen, posted_date, search_name, source, title, company, location, workplace,
-seniority, salary, url, description, score, verdict, seniority_match, location_ok,
-language_blocker, team_type, stack_fit, strong_matches, gaps, red_flags, pitch, status, notes
+seniority, salary, url, company_url, contact_name, contact_title, contact_url, description,
+score, verdict, seniority_match, location_ok, language_blocker, team_type, stack_fit,
+strong_matches, gaps, red_flags, pitch, status, notes
 ```
 
-A CSV written by an older version (without the five reason columns) is migrated in place
-the first time it is read; the export says so once.
+`company_url` is the company's LinkedIn page; `contact_name`, `contact_title` and
+`contact_url` describe the person under "Meet the hiring team" (the one with the Message
+button), when the posting showed one. All four are empty for other sources.
+
+A CSV written by an older version (without the five reason columns, or without the four
+LinkedIn columns) is migrated in place the first time it is read; the export says so once.
 
 ```
 ```

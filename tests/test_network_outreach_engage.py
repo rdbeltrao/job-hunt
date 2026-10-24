@@ -45,6 +45,26 @@ def test_render_plan_lists_links_per_role_and_company_page():
     assert "Engineering Manager [apply](https://x/linkedin:1)" in text
 
 
+def test_render_plan_uses_company_page_and_lists_job_poster_when_the_posting_had_them():
+    rows = [
+        _row(
+            "linkedin:1",
+            "Acme GmbH",
+            verdict="apply",
+            company_url="https://www.linkedin.com/company/acme-gmbh/",
+            contact_name="Jane Doe",
+            contact_title="Talent Acquisition Manager",
+            contact_url="https://www.linkedin.com/in/jane-doe/",
+        ),
+        _row("linkedin:2", "Acme GmbH", verdict="maybe", title="Head of Engineering"),
+    ]
+    text = network.render_plan(network.rank_companies(rows), roles=["CTO"], today="2026-10-19")
+    assert "- [ ] Follow the company page: https://www.linkedin.com/company/acme-gmbh/" in text
+    assert "search/results/companies/" not in text
+    assert "- [ ] Message the job poster of Engineering Manager: Jane Doe (Talent Acquisition Manager) https://www.linkedin.com/in/jane-doe/" in text
+    assert text.count("Message the job poster") == 1
+
+
 def test_render_plan_without_companies_says_so():
     assert "Nothing to do" in network.render_plan([], today="2026-10-19")
 
@@ -84,6 +104,24 @@ def test_build_pack_has_job_profile_people_searches_and_message_shapes():
     assert pack["find_people"]["recruiter"][0]["url"].startswith("https://www.linkedin.com/search/results/people/?keywords=Soar+Technical+Recruiter")
     assert "Engineering+Manager" in pack["job_posts_search"]
     assert set(pack["message_types"]) == {"recruiter-or-hiring-manager", "referral", "networking", "connection-note"}
+    assert pack["contact"] is None
+    assert pack["job"]["company_url"] == ""
+    assert pack["company_page_search"].startswith("https://www.linkedin.com/search/results/companies/?keywords=Soar")
+
+
+def test_build_pack_names_the_job_poster_and_company_page_when_known():
+    row = _row(
+        "linkedin:9",
+        "Soar",
+        company_url="https://www.linkedin.com/company/soar/",
+        contact_name="Jane Doe",
+        contact_title="Talent Acquisition Manager at Soar",
+        contact_url="https://www.linkedin.com/in/jane-doe/",
+    )
+    pack = outreach.build_pack(row, "I am Renato")
+    assert pack["contact"] == {"name": "Jane Doe", "title": "Talent Acquisition Manager at Soar", "url": "https://www.linkedin.com/in/jane-doe/"}
+    assert pack["job"]["company_url"] == "https://www.linkedin.com/company/soar/"
+    assert pack["company_page_search"] == "https://www.linkedin.com/company/soar/"
 
 
 def test_run_outreach_writes_pack_and_rejects_unknown_id(tmp_path, capsys):

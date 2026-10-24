@@ -47,6 +47,12 @@ _ABSOLUTE_DATE_FORMATS = ("%Y-%m-%d", "%b %d, %Y", "%B %d, %Y", "%d %b %Y", "%d 
 # Premium "hiring insights" describe the applicants, not the job; never read a seniority from them.
 _APPLICANT_INSIGHT_RE = re.compile(r"applicant", re.I)
 _EMPLOYMENT_WORDS = ("full-time", "part-time", "contract", "internship", "temporary", "volunteer", "other")
+_COMPANY_URL_RE = re.compile(r"^(https?://[^/]+)?/company/([^/?#]+)", re.I)
+_PROFILE_URL_RE = re.compile(r"^(https?://[^/]+)?/in/([^/?#]+)", re.I)
+_LINKEDIN_ORIGIN = "https://www.linkedin.com"
+# A people block counts as the hiring team only under one of these headings; the same
+# section class also wraps "People you can reach out to" (your own connections there).
+_HIRING_TEAM_RE = re.compile(r"hiring team|job poster|posted by", re.I)
 
 # Selectors for the results list cards; all are tried, matches are merged by job id.
 CARD_SELECTORS = (
@@ -60,6 +66,23 @@ DETAIL_PANE_SELECTORS = (
     ".jobs-search__job-details--wrapper",
     ".jobs-search__job-details--container",
     ".jobs-details",
+)
+# Containers of the top card, where the company name links to the company page.
+COMPANY_LINK_SCOPES = (
+    ".job-details-jobs-unified-top-card__company-name",
+    ".jobs-unified-top-card__company-name",
+    ".job-details-jobs-unified-top-card__container--two-pane",
+    ".job-details-jobs-unified-top-card__primary-description-container",
+    ".jobs-unified-top-card",
+)
+# The "Meet the hiring team" / "Job poster" block: one person with a profile link and a
+# Message (InMail) button. Newer markup first, the 2023 jobs-poster markup after it.
+HIRER_SELECTORS = (
+    ".job-details-people-who-can-help__section .hirer-card__hirer-information",
+    ".hirer-card__hirer-information",
+    ".job-details-people-who-can-help__section",
+    ".jobs-poster__wrapper",
+    ".jobs-poster",
 )
 
 
@@ -84,6 +107,10 @@ class Detail:
     seniority: str = ""
     employment_type: str = ""
     salary: str | None = None
+    company_url: str = ""  # https://www.linkedin.com/company/<slug>/ when the top card links it
+    contact_name: str = ""  # the hiring-team person who can be messaged, when the pane shows one
+    contact_title: str = ""
+    contact_url: str = ""  # https://www.linkedin.com/in/<slug>/
     pills: list[str] = field(default_factory=list)
 
 
@@ -134,7 +161,19 @@ def parse_detail(detail_html: str, now: datetime | None = None) -> Detail:
     description = re.sub(r"^About the job\s*", "", description).strip()
 
     pills = _pill_texts(soup)
-    detail = Detail(title=title, company=company, location=location, description=description, posted_date=posted_date, pills=pills)
+    contact_name, contact_title, contact_url = _hiring_contact(soup)
+    detail = Detail(
+        title=title,
+        company=company,
+        location=location,
+        description=description,
+        posted_date=posted_date,
+        company_url=_company_url(soup),
+        contact_name=contact_name,
+        contact_title=contact_title,
+        contact_url=contact_url,
+        pills=pills,
+    )
     for pill in pills:
         low = pill.lower()
         if detail.workplace is None:
@@ -224,6 +263,10 @@ def build_job(card: Card, detail: Detail | None, search_name: str) -> Job:
         url=f"https://www.linkedin.com/jobs/view/{card.id}/",
         description=d.description,
         salary=d.salary or card.salary,
+        company_url=d.company_url,
+        contact_name=d.contact_name,
+        contact_title=d.contact_title,
+        contact_url=d.contact_url,
         extra=extra,
     )
 
@@ -495,6 +538,75 @@ def _seniority_from_criteria(soup: BeautifulSoup) -> str:
         if text and len(text) < 40:
             return text
     return ""
+
+
+def _company_url(soup: BeautifulSoup) -> str:
+    """Canonical LinkedIn company page linked from the top card, or "".
+
+    The top card links the company name and logo to `/company/<slug>/life`; the slug is
+    kept and the section, query and fragment dropped, so the URL is the same whatever
+    tab LinkedIn linked. Links elsewhere in the pane (similar jobs, description) are ignored.
+    """
+    for scope in COMPANY_LINK_SCOPES:
+        for node in soup.select(scope):
+            for link in node.select('a[href*="/company/"]'):
+                url = canonical_company_url(str(link.get("href", "")))
+                if url:
+                    return url
+    return ""
+
+
+def canonical_company_url(href: str) -> str:
+    """'https://www.linkedin.com/company/momox/life?x=1' -> 'https://www.linkedin.com/company/momox/'; "" when not a company link."""
+    m = _COMPANY_URL_RE.match(href.strip())
+    if not m:
+        return ""
+    origin = m.group(1) or _LINKEDIN_ORIGIN
+    return f"{origin}/company/{m.group(2)}/"
+
+
+def canonical_profile_url(href: str) -> str:
+    """'https://www.linkedin.com/in/jane-doe?miniProfileUrn=...' -> 'https://www.linkedin.com/in/jane-doe/'; "" when not a profile link."""
+    m = _PROFILE_URL_RE.match(href.strip())
+    if not m:
+        return ""
+    origin = m.group(1) or _LINKEDIN_ORIGIN
+    return f"{origin}/in/{m.group(2)}/"
+
+
+def _hiring_contact(soup: BeautifulSoup) -> tuple[str, str, str]:
+    """(name, title, profile URL) of the "Meet the hiring team" person, all "" when the pane shows none.
+
+    LinkedIn renders at most one hirer card per posting, with the name inside a profile
+    link (`/in/<slug>`), the headline below it and a Message button for InMail. The
+    person is only recorded when a profile link is there: a card without one cannot be
+    messaged. The title drops the connection degree ("3rd", "2nd+") LinkedIn appends.
+    """
+    for sel in HIRER_SELECTORS:
+        for card in soup.select(sel):
+            if "hirer-card" not in sel and "jobs-poster" not in sel and not _HIRING_TEAM_RE.search(card.get_text(" ")):
+                continue
+            link = card.select_one('a[href*="/in/"]')
+            url = canonical_profile_url(str(link.get("href", ""))) if link is not None else ""
+            if not url:
+                continue
+            name = _text_first(link, "strong", ".jobs-poster__name", "span[aria-hidden='true']") or squash(link.get_text(" "))
+            name = re.sub(r"\s*(·\s*)?\b(1st|2nd\+?|3rd\+?)\b.*$", "", name).strip()
+            title = _text_first(
+                card,
+                ".hirer-card__hirer-job-title",
+                ".hirer-card__job-poster-headline",
+                ".jobs-poster__headline",
+                ".jobs-poster__job-title",
+                ".t-black--light",
+                ".t-14.t-normal",
+            )
+            title = re.sub(r"^\s*(1st|2nd\+?|3rd\+?)\s*[·•]?\s*", "", title).strip()
+            if title.lower() == name.lower():
+                title = ""
+            if name:
+                return name, title, url
+    return "", "", ""
 
 
 def _pill_texts(soup: BeautifulSoup) -> list[str]:
