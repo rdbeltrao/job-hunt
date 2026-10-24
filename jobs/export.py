@@ -158,6 +158,29 @@ def export_jobs(path: Path, jobs: list[Job], today: str | None = None) -> tuple[
 SCORE_COLUMNS = ("score", "verdict", *REASON_COLUMNS, "strong_matches", "gaps", "red_flags", "pitch")
 
 
+def fill_linkedin_columns(path: Path, jobs: list[Job]) -> int:
+    """Copy company_url and the contact into rows that have none yet, from jobs that do. Returns rows changed.
+
+    Rows are matched on job_id; a row that already carries any of the four values is
+    left alone, as is every other column. The file is rewritten only when a row changed.
+    """
+    by_id = {job.job_id: job for job in jobs if any(getattr(job, col) for col in LINKEDIN_COLUMNS)}
+    if not by_id:
+        return 0
+    rows = read_rows(path)
+    changed = 0
+    for row in rows:
+        job = by_id.get(row["job_id"])
+        if job is None or any((row.get(col) or "").strip() for col in LINKEDIN_COLUMNS):
+            continue
+        for col in LINKEDIN_COLUMNS:
+            row[col] = getattr(job, col) or ""
+        changed += 1
+    if changed:
+        write_rows(path, rows)
+    return changed
+
+
 def read_rows(path: Path) -> list[dict[str, str]]:
     """All rows as dicts keyed by HEADER. Raises HeaderMismatch when the header is not ours."""
     if not path.exists():

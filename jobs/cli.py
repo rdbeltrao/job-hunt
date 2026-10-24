@@ -7,6 +7,7 @@ import random
 import sys
 from pathlib import Path
 
+from jobs import backfill as backfill_mod
 from jobs import settings
 from jobs.adapters import linkedin_guest, personio
 from jobs.config import load_companies, load_searches, load_title_keywords, title_matches
@@ -595,8 +596,96 @@ def run_export(args: argparse.Namespace) -> int:
     except OSError as exc:
         print(f"export: failed: {type(exc).__name__}: {exc}")
         return 1
-    print(f"export: {appended} rows appended, {skipped} skipped (already in {csv_path})")
+    filled = export.fill_linkedin_columns(csv_path, jobs)
+    print(f"export: {appended} rows appended, {skipped} skipped (already in {csv_path})" + (f", {filled} rows given their LinkedIn company page or contact" if filled else ""))
     return 0
+
+
+def run_backfill(args: argparse.Namespace) -> int:
+    """Open LinkedIn openings already in the CSV and fill their company page and hiring contact."""
+    from jobs import backfill, export
+    from jobs.adapters import linkedin_browser
+    from jobs.browser import LoginRequired, persistent_context
+
+    csv_path = Path(args.csv)
+    try:
+        rows = export.read_rows(csv_path)
+    except export.HeaderMismatch as exc:
+        print(f"backfill: refused: {exc}.")
+        return 1
+    if not rows:
+        print(f"backfill: nothing to do, {csv_path} is empty or missing")
+        return 0
+    done_path = Path(args.done)
+    done = backfill.load_done(done_path)
+    verdicts = tuple(v.strip() for v in args.verdicts.split(",") if v.strip())
+    targets = backfill.select_targets(rows, done=set() if args.retry else done, verdicts=verdicts, everything=args.all, limit=args.limit)
+    if not targets:
+        print("backfill: nothing to open: every matching LinkedIn row already has its company page or contact, or was opened before")
+        return 0
+    jobs_path = Path(args.jobs)
+    jobs = load_jobs(jobs_path)
+    jobs_by_id = {j.job_id: j for j in jobs}
+    rows_by_id = {r["job_id"]: r for r in rows}
+    dump_dir = Path(args.dump_html) if args.dump_html else None
+    print(f"backfill: opening {len(targets)} postings ({', '.join(f'{t.job_id} {t.verdict or t.status}' for t in targets[:5])}{', ...' if len(targets) > 5 else ''})", file=sys.stderr)
+
+    found = opened = 0
+    failures: list[str] = []
+    login_required = False
+
+    def save() -> None:
+        export.write_rows(csv_path, rows)
+        if jobs:
+            save_jobs(jobs, jobs_path)
+        backfill.save_done(done, done_path)
+
+    try:
+        with persistent_context(headless=not args.headed) as context:
+            for i, target in enumerate(targets):
+                if i > 0:
+                    backfill.sleep_between_jobs()
+                try:
+                    html = backfill.open_job_page(context, target.source_id, dump_dir)
+                except LoginRequired as exc:
+                    failures.append(f"{target.job_id}: login required (landed on {exc})")
+                    login_required = True
+                    break
+                except Exception as exc:  # noqa: BLE001 - keep going with the next posting
+                    failures.append(f"{target.job_id}: {type(exc).__name__}: {exc}")
+                    log.warning("backfill: %s failed: %s", target.job_id, exc)
+                    continue
+                opened += 1
+                done.add(target.job_id)
+                detail = linkedin_browser.parse_detail(html)
+                row = rows_by_id[target.job_id]
+                if backfill.apply_detail(row, detail, jobs_by_id.get(target.job_id)):
+                    found += 1
+                    who = f" {detail.contact_name} ({detail.contact_title})" if detail.contact_name else ""
+                    print(f"[backfill] {target.job_id}: {row['company']}: {detail.company_url or 'no company page'}{who}", file=sys.stderr)
+                else:
+                    print(f"[backfill] {target.job_id}: {row['company']}: nothing found", file=sys.stderr)
+                if opened % 10 == 0:
+                    save()
+    except LoginRequired as exc:
+        failures.append(f"login required (landed on {exc})")
+        login_required = True
+    except Exception as exc:  # noqa: BLE001 - browser could not start at all
+        failures.append(f"browser: {type(exc).__name__}: {exc}")
+        log.exception("backfill browser session failed")
+    finally:
+        if opened:
+            save()
+
+    print(f"backfill: {opened} postings opened, {found} given a company page or contact, {len(targets) - opened} left")
+    if failures:
+        print("\nFailures:")
+        for f in failures:
+            print(f"  - {f}")
+    if login_required:
+        print(f"\n{LOGIN_HINT}")
+        return 2
+    return 0 if opened or not failures else 1
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
@@ -711,6 +800,18 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="append new jobs to the CSV openings list")
     _add_export_args(export)
     export.set_defaults(func=run_export)
+
+    backfill = sub.add_parser("backfill", help="open LinkedIn openings already in the CSV and fill their company page and hiring contact (InMail) columns")
+    backfill.add_argument("--csv", default="out/jobs.csv")
+    backfill.add_argument("--jobs", default="out/jobs.jsonl", help="also updated for jobs still in it")
+    backfill.add_argument("--done", default="out/backfill.json", help="ids opened by earlier runs; they are skipped")
+    backfill.add_argument("--verdicts", default=",".join(backfill_mod.DEFAULT_VERDICTS), help="verdicts to open, comma-separated (default apply,maybe); rows with an application in progress always count")
+    backfill.add_argument("--all", action="store_true", help="every LinkedIn row that is not closed, whatever its verdict")
+    backfill.add_argument("--limit", type=int, default=None, help="open at most this many postings")
+    backfill.add_argument("--retry", action="store_true", help="open postings again even if an earlier run found nothing")
+    backfill.add_argument("--headed", action="store_true", help="show the browser window")
+    backfill.add_argument("--dump-html", nargs="?", const="out/debug", default=None, help="save each posting's detail HTML (default dir out/debug)")
+    backfill.set_defaults(func=run_backfill)
 
     pipeline = sub.add_parser("pipeline", help="feed career-ops: append new openings from out/jobs.jsonl to the data root's pipeline.md, jd-index.tsv and jds/feeder/")
     _add_pipeline_args(pipeline)

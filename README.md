@@ -309,7 +309,26 @@ strong_matches, gaps, red_flags, pitch, status, notes
 
 `company_url` is the company's LinkedIn page; `contact_name`, `contact_title` and
 `contact_url` describe the person under "Meet the hiring team" (the one with the Message
-button), when the posting showed one. All four are empty for other sources.
+button), when the posting showed one. All four are empty for other sources. `export`
+also fills them on rows that have none yet when `out/jobs.jsonl` has them for that job.
+
+### Backfill (`python -m jobs backfill`)
+
+```bash
+uv run python -m jobs backfill                 # apply and maybe rows, plus applications in progress
+uv run python -m jobs backfill --all --limit 50
+```
+
+`fetch` opens a posting only once, so openings fetched before the four columns existed
+never get them on their own. `backfill` opens each such LinkedIn posting's page in the
+logged-in browser (a few seconds apart, like `fetch`), reads the company page and the
+hiring-team card with the same parser, and writes the four columns into the CSV (and
+into `out/jobs.jsonl` for jobs still there). Nothing else in a row changes. Applications
+in progress come first, then `apply` rows, then `maybe`, each by score; closed rows
+(skipped, rejected, withdrawn) are never opened. `--verdicts` changes the verdict
+filter, `--all` opens every open LinkedIn row, `--limit` caps a run. Opened ids are kept
+in `out/backfill.json` so a posting with no hiring team is not opened again; `--retry`
+opens them once more. Exit code 2 means LinkedIn wants a login, as with `fetch`.
 
 A CSV written by an older version (without the five reason columns, or without the four
 LinkedIn columns) is migrated in place the first time it is read; the export says so once.
