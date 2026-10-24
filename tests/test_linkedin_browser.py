@@ -136,6 +136,54 @@ def test_parse_detail_ignores_people_you_can_reach_out_to_without_a_hirer_card()
     assert d.contact_name == "" and d.contact_url == ""
 
 
+OBFUSCATED_2026_HTML = """
+<div class="l4jlpg l4ju5">
+  <div class="l4jax7 l4jln8">
+    <a class="l4jlyw" href="https://www.linkedin.com/company/intact-gmbh/life/"><p class="l4jk8d">Intact</p></a>
+    <h1 class="l4jk8d">Engineering Manager</h1>
+  </div>
+  <div class="l4jlpg l4jk1g"><div class="l4jkyq"><a href="https://www.linkedin.com/company/intact-gmbh/life/">Intact 9,816 followers</a></div></div>
+  <div class="l4jlpg l4ju5">
+    <div class="l4jlpg l4jkzo">
+      <h2 class="l4jk8d">People you can reach out to</h2>
+      <div class="l4jlpg l4jayf">
+        <p class="l4jk8d">Meet the hiring team</p>
+        <div class="l4jayf l4jij2">
+          <a class="l4jikq l4jlyw" href="https://www.linkedin.com/in/barbara-example-40b29a20a/" tabindex="0">
+            <div class="l4jikq"><figure><img alt="" src="x.jpg"></figure>
+              <div class="l4jlpg"><div class="l4jayf"><div class="l4jk0d"><p class="l4jk8d"><span>Barbara Example</span></p><p class="l4jk8d">• 3rd</p></div></div>
+                <div class="l4jk0d"><p class="l4jk8d"><span>HR-Generalist bei Intact</span></p></div>
+                <p class="l4jk8d">Job poster</p>
+              </div>
+            </div>
+          </a>
+          <div class="l4jlpg"><button class="l4jbtn"><span>Message</span></button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="l4jlpg"><h2>Similar jobs</h2><a href="https://www.linkedin.com/company/other-co/life/">Other Co</a><a href="https://www.linkedin.com/in/someone/">Someone</a></div>
+</div>
+"""
+
+
+def test_parse_detail_reads_company_and_hiring_team_from_the_2026_obfuscated_markup():
+    """Shape of a job page saved with `backfill --dump-html` on 2026-10-24: no semantic class names at all."""
+    d = lb.parse_detail(OBFUSCATED_2026_HTML, now=NOW)
+
+    assert d.company_url == "https://www.linkedin.com/company/intact-gmbh/"  # first company link, not Similar jobs
+    assert d.contact_name == "Barbara Example"
+    assert d.contact_title == "HR-Generalist bei Intact"
+    assert d.contact_url == "https://www.linkedin.com/in/barbara-example-40b29a20a/"
+
+
+def test_parse_detail_2026_markup_without_hiring_team_keeps_company_and_no_contact():
+    html = OBFUSCATED_2026_HTML.split('<div class="l4jlpg l4ju5">\n    <div class="l4jlpg l4jkzo">')[0] + "</div>"
+    d = lb.parse_detail(html, now=NOW)
+    assert d.company_url == "https://www.linkedin.com/company/intact-gmbh/"
+    assert d.contact_name == "" and d.contact_url == ""
+
+
 def test_parse_detail_hirer_card_without_profile_link_is_not_a_contact():
     html = """
     <div class="scaffold-layout__detail">

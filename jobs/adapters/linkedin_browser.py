@@ -53,6 +53,9 @@ _LINKEDIN_ORIGIN = "https://www.linkedin.com"
 # A people block counts as the hiring team only under one of these headings; the same
 # section class also wraps "People you can reach out to" (your own connections there).
 _HIRING_TEAM_RE = re.compile(r"hiring team|job poster|posted by", re.I)
+_HIRING_TEAM_LABEL_RE = re.compile(r"^\s*(Meet the hiring team|Job poster)\s*$", re.I)
+_CONNECTION_DEGREE_RE = re.compile(r"^[\s·•]*(1st|2nd\+?|3rd\+?)\s*$", re.I)
+_CONTACT_NOISE = {"job poster", "message", "connect", "follow", "view profile"}
 
 # Selectors for the results list cards; all are tried, matches are merged by job id.
 CARD_SELECTORS = (
@@ -553,6 +556,12 @@ def _company_url(soup: BeautifulSoup) -> str:
                 url = canonical_company_url(str(link.get("href", "")))
                 if url:
                     return url
+    # The 2026 job page carries only obfuscated class names; the top card is still the
+    # first thing in the pane, so its company link is the first one in document order.
+    for link in soup.select('a[href*="/company/"]'):
+        url = canonical_company_url(str(link.get("href", "")))
+        if url:
+            return url
     return ""
 
 
@@ -606,6 +615,45 @@ def _hiring_contact(soup: BeautifulSoup) -> tuple[str, str, str]:
                 title = ""
             if name:
                 return name, title, url
+    return _hiring_contact_by_label(soup)
+
+
+def _hiring_contact_by_label(soup: BeautifulSoup) -> tuple[str, str, str]:
+    """The same card on the 2026 markup, which has no stable class names.
+
+    Anchors on the literal "Meet the hiring team" / "Job poster" label, climbs to the
+    nearest block holding a profile link and reads the link's text runs: the first is
+    the name, the first later one that is not a connection degree or a button label is
+    the headline.
+    """
+    for label in soup.find_all(string=_HIRING_TEAM_LABEL_RE):
+        block = label.parent
+        link = None
+        for _ in range(8):
+            if block is None or not isinstance(block, Tag):
+                break
+            link = block.select_one('a[href*="/in/"]')
+            if link is not None:
+                break
+            block = block.parent
+        if link is None:
+            continue
+        url = canonical_profile_url(str(link.get("href", "")))
+        if not url:
+            continue
+        runs = [squash(t) for t in link.stripped_strings]
+        runs = [t for t in runs if t and not _HIRING_TEAM_LABEL_RE.match(t)]
+        if not runs:
+            continue
+        name = re.sub(r"\s*[·•]\s*(1st|2nd\+?|3rd\+?)\s*$", "", runs[0]).strip()
+        title = ""
+        for t in runs[1:]:
+            if _CONNECTION_DEGREE_RE.match(t) or t.lower() in _CONTACT_NOISE or t.lower() == name.lower():
+                continue
+            title = t
+            break
+        if name:
+            return name, title, url
     return "", "", ""
 
 
