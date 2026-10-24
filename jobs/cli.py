@@ -727,15 +727,31 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_evaluate(args: argparse.Namespace) -> int:
+    """Queue the pending career-ops inbox for its headless batch evaluation and start the runner."""
+    from jobs import evaluate as evaluate_mod
+
+    return evaluate_mod.main_from_args(
+        getattr(args, "data_root", None) or settings.data_root(),
+        getattr(args, "career_ops", None),
+        parallel=getattr(args, "parallel", evaluate_mod.DEFAULT_PARALLEL),
+        wait=bool(getattr(args, "wait", False)),
+        dry_run=bool(getattr(args, "dry_run", False)),
+    )
+
+
 def run_all(args: argparse.Namespace) -> int:
-    """fetch, score, (pipeline when a data root is given), export in order; each step runs even when the previous one failed.
+    """fetch, score, (pipeline and evaluate when a data root is given), export in order; each step runs even when the previous one failed.
 
     Scoring runs before the pipeline export so every exported row carries its Jev
-    verdict and the skip verdicts stay out of the career-ops inbox.
+    verdict and the skip verdicts stay out of the career-ops inbox. The evaluate step
+    only queues the new rows and starts the detached batch runner; it never waits for it.
     """
     steps = [("fetch", run_fetch), ("score", run_score)]
     if getattr(args, "data_root", None):
         steps.append(("pipeline", run_pipeline))
+        if not getattr(args, "no_evaluate", False):
+            steps.append(("evaluate", run_evaluate))
     steps.append(("export", run_export))
     results: list[tuple[str, int]] = []
     for name, func in steps:
@@ -790,6 +806,30 @@ def _add_pipeline_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--include-skips", action="store_true", help="also export jobs whose Jev verdict is skip (left out by default)")
 
 
+def _add_evaluate_args(p: argparse.ArgumentParser, *, for_run: bool = False) -> None:
+    from jobs import evaluate as evaluate_mod
+
+    if not any(a.dest == "data_root" for a in p._actions):
+        p.add_argument(
+            "--data-root",
+            default=settings.data_root(),
+            metavar="PATH",
+            help=f"career-ops data directory whose data/pipeline.md is queued (default from {settings.DATA_ROOT})",
+        )
+    p.add_argument(
+        "--career-ops",
+        default=None,
+        metavar="PATH",
+        help=f"career-ops checkout with sync-batch-input.mjs and batch/batch-runner.sh (default from {settings.CAREER_OPS}, else ~/Projects/career-ops)",
+    )
+    p.add_argument("--parallel", type=int, default=evaluate_mod.DEFAULT_PARALLEL, help=f"headless agents the batch runner runs at once (default {evaluate_mod.DEFAULT_PARALLEL})")
+    if for_run:
+        p.add_argument("--no-evaluate", action="store_true", help="feed career-ops but do not queue or start its batch evaluation")
+    else:
+        p.add_argument("--wait", action="store_true", help="run the batch runner in the foreground instead of detaching it")
+        p.add_argument("--dry-run", action="store_true", help="show which pending rows would be queued; start nothing")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="jobs", description="Fetch job postings into normalized records.")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
@@ -826,6 +866,10 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline = sub.add_parser("pipeline", help="feed career-ops: append new openings from out/jobs.jsonl to the data root's pipeline.md, jd-index.tsv and jds/feeder/")
     _add_pipeline_args(pipeline)
     pipeline.set_defaults(func=run_pipeline)
+
+    evaluate = sub.add_parser("evaluate", help="queue the pending career-ops inbox for its headless A-G batch evaluation (sync-batch-input.mjs, then batch/batch-runner.sh detached; Jev skip verdicts get no agent)")
+    _add_evaluate_args(evaluate)
+    evaluate.set_defaults(func=run_evaluate)
 
     status = sub.add_parser("status", help="show rows whose status is not new, or set the status of given job_ids")
     status.add_argument("--csv", default="out/jobs.csv")
@@ -883,11 +927,12 @@ def build_parser() -> argparse.ArgumentParser:
     engage.add_argument("--done", nargs="*", metavar="POST_URL", help="mark these post URLs as commented on")
     engage.set_defaults(func=run_engage)
 
-    run = sub.add_parser("run", help="fetch, score, export in one go (daily run); with --data-root also feeds career-ops right after fetch")
+    run = sub.add_parser("run", help="fetch, score, export in one go (daily run); with --data-root also feeds career-ops and starts its batch evaluation")
     _add_fetch_args(run)
     _add_score_args(run)
     _add_export_args(run)
     _add_pipeline_args(run)
+    _add_evaluate_args(run, for_run=True)
     run.set_defaults(func=run_all)
     return parser
 

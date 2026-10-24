@@ -32,6 +32,9 @@ SCORE_MODEL = "JOB_HUNT_SCORE_MODEL"
 # Optional: the career-ops data root `jobs pipeline` (and `jobs run --data-root`) feed. A path,
 # so it is read from the environment only, never from the Keychain.
 DATA_ROOT = "JOB_HUNT_DATA_ROOT"
+# Optional: the career-ops checkout `jobs evaluate` runs sync-batch-input.mjs and
+# batch/batch-runner.sh from (default ~/Projects/career-ops). A path, environment only.
+CAREER_OPS = "JOB_HUNT_CAREER_OPS"
 
 
 def env(name: str) -> str | None:

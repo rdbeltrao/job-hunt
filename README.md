@@ -95,8 +95,9 @@ root (the directory `CAREER_OPS_DATA_DIR` points at):
 
 ```bash
 uv run python -m jobs pipeline --data-root ~/Projects/job-hunt-private
-uv run python -m jobs run --data-root ~/Projects/job-hunt-private     # fetch, pipeline, score, export
-export JOB_HUNT_DATA_ROOT=~/Projects/job-hunt-private                 # or put it in .env; then --data-root is optional
+uv run python -m jobs evaluate --data-root ~/Projects/job-hunt-private  # queue the inbox, start the batch runner
+uv run python -m jobs run --data-root ~/Projects/job-hunt-private       # fetch, score, pipeline, evaluate, export
+export JOB_HUNT_DATA_ROOT=~/Projects/job-hunt-private                   # or put it in .env; then --data-root is optional
 ```
 
 It writes three things, and nothing else in the data root:
@@ -127,6 +128,27 @@ The command is idempotent: a URL already on any checkbox row of `data/pipeline.m
 the same `out/jobs.jsonl` adds no row and no file. It never edits or removes a row.
 Jobs without a description are exported too; career-ops can fetch the posting itself.
 `--date` sets `first_seen` for jobs that have none (default today).
+
+### Evaluating the inbox (`python -m jobs evaluate`)
+
+A row in `data/pipeline.md` is only an inbox entry. The full A-G report and the tracker
+row come from career-ops's headless batch, which used to be started by hand (or from the
+dashboard, whose worker dies with the browser tab). `evaluate` runs that batch from the
+command line, in the career-ops checkout (`--career-ops`, else `JOB_HUNT_CAREER_OPS`,
+else `~/Projects/career-ops`):
+
+1. `node sync-batch-input.mjs --pipeline <data root>/data/pipeline.md` copies the pending
+   rows into `batch/batch-input.tsv`; rows already queued or processed are left alone.
+2. `bash batch/batch-runner.sh --skip-jev-verdict skip --parallel 3` is started detached
+   (its own session, output appended to `<data root>/data/batch-runner.log`), so a
+   scheduled agent can start it and end its turn. Postings Jev marked `skip` get no
+   agent; `apply` and `maybe` both do. When the runner's own lock
+   (`batch/batch-runner.pid`) belongs to a live process, the new rows are only queued
+   and that run is left alone.
+
+`--wait` keeps the runner in the foreground, `--dry-run` only lists what would be
+queued, `--parallel N` sets the number of agents. `run --data-root` performs this step
+right after `pipeline`; `--no-evaluate` leaves it out.
 
 With career-ops in place, `score`, `explain`, `export`, `status`, `network` and
 `outreach` are superseded by its modes (`jev-rank.mjs`, the A-H report,
@@ -366,6 +388,9 @@ JOB_HUNT_SCORE_MODEL=anthropic/claude-haiku-5.5
 
 # Optional: career-ops data root fed by `python -m jobs pipeline` (a path, read from the environment only)
 JOB_HUNT_DATA_ROOT=
+
+# Optional: career-ops checkout `python -m jobs evaluate` runs the batch from (default ~/Projects/career-ops)
+JOB_HUNT_CAREER_OPS=
 ```
 
 With a variable unset, the step that needs it prints which variable is missing and is
