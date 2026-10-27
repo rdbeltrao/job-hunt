@@ -32,7 +32,7 @@ ACTIVE_STATUSES = ("draft", "applied", "replied", "interview", "offer")
 CLOSED_STATUSES = ("skipped", "rejected", "withdrawn")
 JOB_WAIT_S = (3.0, 7.0)
 JOB_VIEW_URL = "https://www.linkedin.com/jobs/view/{job_id}/"
-DETAIL_WAIT_SELECTOR = "#job-details, .jobs-description__content, .jobs-description-content__text, .jobs-box__html-content"
+DETAIL_WAIT_SELECTOR = '#job-details, .jobs-description__content, .jobs-description-content__text, .jobs-box__html-content, section[aria-label="Primary content"] [data-testid="expandable-text-box"]'
 _SOURCE_ID_RE = re.compile(r"^linkedin:(\d+)$")
 _NOT_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _COMPANY_SUFFIX_RE = re.compile(r"\b(gmbh|ag|se|inc|llc|ltd|limited|co|kg|sa|sas|srl|bv|ab|oy|plc|group|labs?|technologies|technology|gmbh & co kg)\b")
@@ -169,18 +169,13 @@ def open_job_page(context, source_id: str, dump_dir: Path | None = None) -> str:
     except Exception:  # noqa: BLE001 - an expired posting shows no description; the top card still carries the company
         log.debug("backfill: description selector did not appear for %s", source_id)
     page.wait_for_timeout(random.randint(400, 900))
-    html = ""
-    for sel in lb.DETAIL_PANE_SELECTORS + (".job-view-layout", "main"):
-        loc = page.locator(sel).first
-        try:
-            if loc.count():
-                html = loc.inner_html(timeout=3000)
-                break
-        except Exception:  # noqa: BLE001
-            continue
-    html = html or page.content()
+    # Keep the document title as well as the scoped primary content: the current
+    # LinkedIn layout carries its title/company there and its job ID in a banner.
+    html = page.content()
+    if lb.parse_detail(html).job_id != source_id:
+        raise WrongPosting(f"primary job identity does not match {source_id}")
     if dump_dir:
-        lb._dump(dump_dir, f"backfill-{source_id}-detail.html", html)
+        lb._dump(dump_dir, f"backfill-{source_id}-detail.json", json.dumps(vars(lb.parse_detail(html)), ensure_ascii=False))
     return html
 
 

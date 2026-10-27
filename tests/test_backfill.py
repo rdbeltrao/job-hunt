@@ -188,3 +188,33 @@ def test_run_backfill_stops_on_login_wall(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "login required" in out and "jobs login" in out
     assert export.read_rows(csv_path)[0]["company_url"] == ""
+
+
+def test_open_job_page_rejects_same_company_recommendation(monkeypatch):
+    from types import SimpleNamespace
+    import pytest
+
+    html = '<h1><a href="/jobs/view/10/">Another Acme job</a></h1><div id="job-details">Different role.</div>'
+    page = SimpleNamespace(
+        url='https://www.linkedin.com/jobs/view/1/',
+        goto=lambda *a, **kw: None, wait_for_timeout=lambda *a: None,
+        wait_for_selector=lambda *a, **kw: None, content=lambda: html,
+    )
+    monkeypatch.setattr('jobs.browser.first_page', lambda context: page)
+    monkeypatch.setattr('jobs.browser.assert_logged_in', lambda page: None)
+    with pytest.raises(backfill.WrongPosting, match='primary job identity'):
+        backfill.open_job_page(object(), '1')
+
+
+def test_open_job_page_accepts_exact_primary_identity(monkeypatch):
+    from types import SimpleNamespace
+
+    html = '<h1><a href="/jobs/view/1/">Acme job</a></h1><div id="job-details">Build.</div>'
+    page = SimpleNamespace(
+        url='https://www.linkedin.com/jobs/view/1/',
+        goto=lambda *a, **kw: None, wait_for_timeout=lambda *a: None,
+        wait_for_selector=lambda *a, **kw: None, content=lambda: html,
+    )
+    monkeypatch.setattr('jobs.browser.first_page', lambda context: page)
+    monkeypatch.setattr('jobs.browser.assert_logged_in', lambda page: None)
+    assert backfill.open_job_page(object(), '1') == html

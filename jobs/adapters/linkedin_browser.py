@@ -7,11 +7,13 @@ the normal job search page as the signed-in user, at human pace, is the chosen t
 Parsing is split out into pure functions over HTML strings (parse_cards, parse_detail)
 so it can be unit tested against saved fixtures without a browser. LinkedIn changes
 its DOM regularly; every selector below has fallbacks, and `--dump-html` writes the raw
-list and detail HTML to out/debug/ so a broken selector can be fixed from real markup.
+list HTML and validated detail JSON to out/debug/ for diagnosis. Full posting
+documents are never dumped because they may contain session metadata.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 import re
@@ -101,6 +103,7 @@ class Card:
 
 @dataclass
 class Detail:
+    job_id: str = ""  # Identity from the primary job heading, never a recommendation.
     title: str = ""
     company: str = ""
     location: str = ""
@@ -147,31 +150,45 @@ def parse_cards(list_html: str) -> list[Card]:
 
 def parse_detail(detail_html: str, now: datetime | None = None) -> Detail:
     soup = BeautifulSoup(detail_html, "html.parser")
-    title = _text_first(soup, ".job-details-jobs-unified-top-card__job-title", "h1.t-24", "h1", "h2.jobs-details-top-card__job-title")
-    company = _text_first(soup, ".job-details-jobs-unified-top-card__company-name", ".jobs-unified-top-card__company-name", ".jobs-details-top-card__company-url") or _company_name_from_link(soup)
+    primary = soup.select_one('section[aria-label="Primary content"]')
+    scope = primary or soup
+    heading = scope.select_one('.job-details-jobs-unified-top-card__job-title, h1.t-24, h1, h2.jobs-details-top-card__job-title')
+    link = heading.select_one('a[href*="/jobs/view/"]') if heading else None
+    identity = _JOB_ID_RE.search(str(link.get("href", ""))) if link else None
+    title = _text_first(scope, ".job-details-jobs-unified-top-card__job-title", "h1.t-24", "h1", "h2.jobs-details-top-card__job-title")
+    company = _text_first(scope, ".job-details-jobs-unified-top-card__company-name", ".jobs-unified-top-card__company-name", ".jobs-details-top-card__company-url") or _company_name_from_link(scope)
+    banner = primary.select_one('[id^="JobDetails_ManageJobBanner_"]') if primary else None
+    modern_id = re.fullmatch(r"JobDetails_ManageJobBanner_(\d+)", banner.get("id", "")) if banner else None
+    parts = _text_first(soup, "title").rsplit(" | ", 2)
+    if modern_id and len(parts) == 3 and parts[-1] == "LinkedIn":
+        title, company = parts[:2]
     meta = _text_first(
-        soup,
+        scope,
         ".job-details-jobs-unified-top-card__tertiary-description-container",
         ".job-details-jobs-unified-top-card__primary-description-container",
         ".jobs-unified-top-card__primary-description",
         ".jobs-unified-top-card__subtitle-primary-grouping",
     )
     location = _location_from_meta(meta)
-    posted_date = _datetime_first(soup) or posted_date_from_text(meta, now)
+    posted_date = _datetime_first(scope) or posted_date_from_text(meta, now)
 
-    desc_node = _first_node(soup, "#job-details", ".jobs-description__content", ".jobs-description-content__text", ".jobs-box__html-content", "article")
+    desc_node = _first_node(scope, "#job-details", ".jobs-description__content", ".jobs-description-content__text", ".jobs-box__html-content", '[data-testid="expandable-text-box"]', "article")
     description = html_to_text(desc_node.decode_contents()) if desc_node is not None else ""
     description = re.sub(r"^About the job\s*", "", description).strip()
 
-    pills = _pill_texts(soup)
-    contact_name, contact_title, contact_url = _hiring_contact(soup)
+    pills = _pill_texts(scope)
+    contact_name, contact_title, contact_url = _hiring_contact(scope)
+    job_id = identity.group(1) if identity else modern_id.group(1) if modern_id else ""
+    if identity and modern_id and identity.group(1) != modern_id.group(1):
+        job_id = ""
     detail = Detail(
+        job_id=job_id,
         title=title,
         company=company,
         location=location,
         description=description,
         posted_date=posted_date,
-        company_url=_company_url(soup),
+        company_url=_company_url(scope),
         contact_name=contact_name,
         contact_title=contact_title,
         contact_url=contact_url,
@@ -191,7 +208,7 @@ def parse_detail(detail_html: str, now: datetime | None = None) -> Detail:
         elif detail.salary is None and _SALARY_RE.search(pill):
             detail.salary = pill
     if not detail.seniority:
-        detail.seniority = _seniority_from_criteria(soup)
+        detail.seniority = _seniority_from_criteria(scope)
     return detail
 
 
@@ -244,6 +261,8 @@ def with_start(search_url: str, start: int) -> str:
 
 
 def build_job(card: Card, detail: Detail | None, search_name: str) -> Job:
+    if detail is not None:
+        validate_detail(card, detail)
     d = detail or Detail()
     title = d.title or card.title
     company = d.company or card.company
@@ -272,6 +291,23 @@ def build_job(card: Card, detail: Detail | None, search_name: str) -> Job:
         contact_url=d.contact_url,
         extra=extra,
     )
+
+
+class WrongPosting(ValueError):
+    """Details do not prove they belong to the requested search card."""
+
+
+def validate_detail(card: Card, detail: Detail) -> None:
+    if detail.job_id != card.id:
+        raise WrongPosting(f"expected job {card.id}, primary heading is {detail.job_id or 'unidentified'}")
+    def key(value: str) -> str:
+        return re.sub(r"\W+", " ", value.casefold()).strip()
+    for field in ("title", "company"):
+        expected, actual = getattr(card, field), getattr(detail, field)
+        if not actual or (expected and key(expected) != key(actual)):
+            raise WrongPosting(f"job {card.id}: {field} does not match the search card")
+    if not detail.description:
+        raise WrongPosting(f"job {card.id}: no description for the verified posting")
 
 
 # ---------------------------------------------------------------- browser driving
@@ -331,9 +367,11 @@ def fetch(
                 _sleep(*CARD_WAIT_S)
                 try:
                     detail_html = _open_detail(page, card.id)
+                    candidate = parse_detail(detail_html)
+                    validate_detail(card, candidate)
                     if dump_dir:
-                        _dump(dump_dir, f"{search_name}-{card.id}-detail.html", detail_html)
-                    detail = parse_detail(detail_html)
+                        _dump(dump_dir, f"{search_name}-{card.id}-detail.json", json.dumps(vars(candidate), ensure_ascii=False))
+                    detail = candidate
                 except LoginRequired:
                     raise
                 except Exception as exc:  # noqa: BLE001 - keep the card, log the failure
@@ -398,34 +436,22 @@ def _results_html(page: Page) -> str:
 
 
 def _open_detail(page: Page, job_id: str) -> str:
-    card = page.locator(f'li[data-occludable-job-id="{job_id}"], div.job-card-container[data-job-id="{job_id}"], a[href*="/jobs/view/{job_id}"]').first
+    # A fresh document cannot retain the previous search selection's description.
+    # LinkedIn can still substitute a recommendation, so the primary heading's
+    # identity is checked again by validate_detail before anything is saved.
+    posting = page.context.new_page()
     try:
-        card.scroll_into_view_if_needed(timeout=5000)
-        card.click(timeout=5000)
-    except Exception:  # noqa: BLE001 - occluded (virtualised) card; scroll it to the centre and retry once
-        card.evaluate("el => el.scrollIntoView({block: 'center'})")
-        page.wait_for_timeout(random.randint(600, 1200))
-        card.click(timeout=5000)
-    # The detail pane re-renders asynchronously; wait until the URL carries this job id
-    # or the description block shows up, whichever comes first.
-    try:
-        page.wait_for_url(re.compile(rf"currentJobId={job_id}"), timeout=8000)
-    except Exception:  # noqa: BLE001
-        pass
-    _assert_logged_in(page)
-    try:
-        page.wait_for_selector("#job-details, .jobs-description__content, .jobs-description-content__text", timeout=8000)
-    except Exception:  # noqa: BLE001
-        log.debug("linkedin: description selector did not appear for %s", job_id)
-    page.wait_for_timeout(random.randint(400, 900))
-    for sel in DETAIL_PANE_SELECTORS:
-        loc = page.locator(sel).first
-        try:
-            if loc.count():
-                return loc.inner_html(timeout=3000)
-        except Exception:  # noqa: BLE001
-            continue
-    return page.content()
+        posting.goto(f"https://www.linkedin.com/jobs/view/{job_id}/", wait_until="domcontentloaded")
+        _assert_logged_in(posting)
+        posting.wait_for_selector('#job-details, .jobs-description__content, .jobs-description-content__text, section[aria-label="Primary content"] [data-testid="expandable-text-box"]', timeout=8000)
+        posting.wait_for_timeout(random.randint(400, 900))
+        html = posting.content()
+        detail = parse_detail(html)
+        if detail.job_id != job_id:
+            raise WrongPosting(f"expected job {job_id}, primary heading is {detail.job_id or 'unidentified'}")
+        return html
+    finally:
+        posting.close()
 
 
 def _sleep(lo: float, hi: float) -> None:

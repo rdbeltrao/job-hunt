@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -62,6 +63,7 @@ def test_parse_detail_without_hiring_team_leaves_contact_blank(fixture_text):
 
 HIRER_CARD_HTML = """
 <div class="scaffold-layout__detail">
+  <h1><a href="/jobs/view/4477388263/">Engineering Manager</a></h1>
   <div class="job-details-jobs-unified-top-card__company-name">
     <a class="app-aware-link" href="https://www.linkedin.com/company/acme-gmbh/life?trk=x">Acme GmbH</a>
   </div>
@@ -250,6 +252,7 @@ def test_build_job_carries_company_page_and_contact(fixture_text):
     card = lb.parse_cards(fixture_text("linkedin_browser_list.html"))[0]
     detail = lb.parse_detail(HIRER_CARD_HTML, now=NOW)
 
+    card = replace(card, title=detail.title, company=detail.company)
     job = lb.build_job(card, detail, "s")
 
     assert job.company_url == "https://www.linkedin.com/company/acme-gmbh/"
@@ -397,6 +400,7 @@ def test_build_job_uses_detail_posted_date_when_card_has_none(fixture_text):
     card = lb.parse_cards(fixture_text("linkedin_browser_list_real.html"))[1]
     detail = lb.parse_detail(fixture_text("linkedin_browser_detail_real.html"), now=NOW)
     assert card.posted_date == ""
+    card = replace(card, id=detail.job_id, title=detail.title, company=detail.company)
 
     job = lb.build_job(card, detail, "em-germany-24h")
 
@@ -409,6 +413,7 @@ def test_build_job_prefers_card_time_tag_over_detail_text(fixture_text):
     card = lb.parse_cards(fixture_text("linkedin_browser_list_real.html"))[0]
     detail = lb.parse_detail(fixture_text("linkedin_browser_detail_real.html"), now=NOW)
 
+    card = replace(card, id=detail.job_id, title=detail.title, company=detail.company)
     job = lb.build_job(card, detail, "s")
 
     assert job.posted_date == "2026-10-16"
@@ -443,3 +448,70 @@ def test_parse_detail_ignores_description_bullets_that_merely_mention_seniority(
 
     d2 = lb.parse_detail('<div id="job-details"><ul><li><strong>Seniority &amp; Leadership:</strong> <span>Led teams.</span></li></ul></div>', now=NOW)
     assert d2.seniority == ""
+
+
+@pytest.mark.parametrize('change', [
+    {'job_id': '4380699028'}, {'job_id': ''},
+    {'company': 'TEN Thüringer Energienetze'}, {'title': 'Another engineering role'},
+    {'description': ''},
+])
+def test_build_job_refuses_unverified_or_conflicting_details(fixture_text, change):
+    card = lb.parse_cards(fixture_text('linkedin_browser_list.html'))[1]
+    detail = lb.parse_detail(fixture_text('linkedin_browser_detail.html'))
+    with pytest.raises(lb.WrongPosting):
+        lb.build_job(card, replace(detail, **change), 'search')
+
+
+def test_matching_recommendation_link_cannot_validate_wrong_primary_heading():
+    html = '''<h1><a href="/jobs/view/111/">Wrong job</a></h1>
+    <aside><h2><a href="/jobs/view/222/">Wanted job</a></h2></aside>'''
+    assert lb.parse_detail(html).job_id == '111'
+
+
+def test_modern_posting_identity_is_scoped_to_primary_content():
+    html = '''<title>Engineering Manager | Doctolib | LinkedIn</title>
+    <main><section aria-label="Primary content">
+    <div id="JobDetails_ManageJobBanner_222"></div>
+    <h2>About the job</h2><span data-testid="expandable-text-box">Lead engineers.</span>
+    </section><aside><div id="JobDetails_ManageJobBanner_111"></div></aside></main>'''
+    detail = lb.parse_detail(html)
+    assert detail.job_id == '222'
+    assert detail.title == 'Engineering Manager'
+    assert detail.company == 'Doctolib'
+    assert detail.description == 'Lead engineers.'
+    lb.validate_detail(lb.Card(id='222', title=detail.title, company=detail.company), detail)
+    assert lb.parse_detail(html.replace('JobDetails_ManageJobBanner_222', 'unknown')).job_id == ''
+
+
+def test_open_detail_uses_fresh_document_and_always_closes_it(monkeypatch, fixture_text):
+    from types import SimpleNamespace
+    html = fixture_text('linkedin_browser_detail.html')
+    events = []
+    posting = SimpleNamespace(
+        goto=lambda url, **kw: events.append(('goto', url)),
+        wait_for_selector=lambda *a, **kw: None,
+        wait_for_timeout=lambda *a: None,
+        content=lambda: html,
+        close=lambda: events.append(('close',)),
+    )
+    page = SimpleNamespace(context=SimpleNamespace(new_page=lambda: posting))
+    monkeypatch.setattr(lb, '_assert_logged_in', lambda p: None)
+    assert lb._open_detail(page, '4477001122') == html
+    assert events == [('goto', 'https://www.linkedin.com/jobs/view/4477001122/'), ('close',)]
+    with pytest.raises(lb.WrongPosting):
+        lb._open_detail(page, '4380699028')
+    assert events[-1] == ('close',)
+
+
+def test_fetch_keeps_card_without_poisoning_description_on_identity_failure(monkeypatch, fixture_text):
+    from types import SimpleNamespace
+    page = SimpleNamespace(goto=lambda *a, **kw: None, wait_for_timeout=lambda *a: None)
+    context = SimpleNamespace(pages=[page])
+    for name in ['_assert_logged_in', '_wait_for_cards', '_scroll_results', '_sleep']:
+        monkeypatch.setattr(lb, name, lambda *a: None)
+    monkeypatch.setattr(lb, '_results_html', lambda p: fixture_text('linkedin_browser_list.html'))
+    monkeypatch.setattr(lb, '_open_detail', lambda *a: fixture_text('linkedin_browser_detail.html'))
+    jobs = lb.fetch(context, 'https://www.linkedin.com/jobs/search/', 'search', max_pages=1)
+    assert len(jobs) == 3
+    assert [bool(job.description) for job in jobs] == [False, True, False]
+    assert jobs[0].company == 'Deutsche Glasfaser Unternehmensgruppe'
